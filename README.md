@@ -32,4 +32,4 @@ Having been built on stellar and being a soroban smart contract, ChamaVault appl
 cargo test
 
 ## Testnet Contract ID
-CB4IQW7N33KD7WKX53WRGOXGIONRTQLRUUH7CLSPHPY44I2632T45KOV
+CDB76V4HNBC7LIQHEJUIAUHNM4B2GSUJ6RMD6KEIC4YIRMPWXKL663QE

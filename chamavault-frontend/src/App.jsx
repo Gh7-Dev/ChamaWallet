@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { getAddress, isConnected, requestAccess } from "@stellar/freighter-api"
 
-const CONTRACT_ID = "CB4IQW7N33KD7WKX53WRGOXGIONRTQLRUUH7CLSPHPY44I2632T45KOV";
+const CONTRACT_ID = "CDB76V4HNBC7LIQHEJUIAUHNM4B2GSUJ6RMD6KEIC4YIRMPWXKL663QE";
 const NETWORK = "TESTNET";
 
 function App() {
@@ -42,8 +42,8 @@ function App() {
         {page === "home" && <p>Select an action above.</p>}
         {page === "create" && <CreateChama walletAddress={walletAddress} />}
         {page === "addMember" && <AddMember walletAddress={walletAddress} />}
-        {page === "deposit" && <Deposit />}
-        {page === "propose" && <ProposeWithdrawal />}
+        {page === "deposit" && <Deposit walletAddress={walletAddress} />}
+        {page === "propose" && <ProposeWithdrawal walletAddress={walletAddress} />}
         {page === "approve" && <ApproveWithdrawal />}
         {page === "view" && <ViewChama />}
       </div>
@@ -93,7 +93,7 @@ function CreateChama({walletAddress}) {
       if (signResult.error) throw new Error(signResult.error);
       const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signResult.signedTxXdr, Networks.TESTNET);
       const result = await server.sendTransaction(txToSubmit);
-      if (result.status === "ERROR") throw new Error(result.errorResult);
+      if (result.status === "ERROR") throw new Error(JSON.stringify(result.errorResult));
 
       setStatus("Confirming transaction...");
       let confirmed;
@@ -108,12 +108,10 @@ function CreateChama({walletAddress}) {
         throw new Error("Transaction failed: " + confirmed.status);
       }
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
     }
   }
-    //setStatus("Connecting to Freighter wallet...");
-    // contract call will go here
-
+    
   return (
     <div>
       <h2>Create Chama</h2>
@@ -170,7 +168,7 @@ function AddMember({ walletAddress }) {
       if (signResult.error) throw new Error(signResult.error);
       const txToSubmit = StellarSdk.TransactionBuilder.fromXDR(signResult.signedTxXdr, Networks.TESTNET);
       const result = await server.sendTransaction(txToSubmit);
-      if (result.status === "ERROR") throw new Error(result.errorResult);
+      if (result.status === "ERROR") throw new Error(JSON.stringify(result.errorResult));
 
       setStatus("Confirming transaction...");
       let confirmed;
@@ -185,7 +183,7 @@ function AddMember({ walletAddress }) {
         throw new Error("Transaction failed: " + confirmed.status);
       }
     } catch (err) {
-      setStatus("Error: " + err.message);
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
     }
   };
 
@@ -213,11 +211,201 @@ function AddMember({ walletAddress }) {
     </div>
   );
 }
-function Deposit() {
-  return <div><h2>Deposit</h2><p>Form coming soon</p></div>;
+function Deposit({ walletAddress }) {
+  const [chamaName, setChamaName] = useState("");
+  const [tokenId, setTokenId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [status, setStatus] = useState("");
+
+  const handleDeposit = async () => {
+    if (!chamaName) { setStatus("Please enter a chama name"); return; }
+    if (!tokenId) { setStatus("Please enter a token contract address"); return; }
+    if (!amount || isNaN(amount) || Number(amount) <= 0) { setStatus("Please enter a valid amount"); return; }
+    if (!walletAddress) { setStatus("Please connect wallet first"); return; }
+    try {
+      setStatus("Building transaction...");
+      const StellarSdk = await import("@stellar/stellar-sdk");
+      const { Contract, TransactionBuilder, Networks, BASE_FEE, nativeToScVal, Address } = StellarSdk;
+      const server = new StellarSdk.rpc.Server("https://soroban-testnet.stellar.org");
+      const { signTransaction } = await import("@stellar/freighter-api");
+      const amountInStroops = BigInt(Math.round(Number(amount) * 1e7));
+
+      // Step 1: approve
+      const account = await server.getAccount(walletAddress);
+      const ledger = await server.getLatestLedger();
+      const approveTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+        .addOperation(
+          new Contract(tokenId).call(
+            "approve",
+            new Address(walletAddress).toScVal(),
+            new Address(CONTRACT_ID).toScVal(),
+            nativeToScVal(amountInStroops, { type: "i128" }),
+            nativeToScVal(ledger.sequence + 100, { type: "u32" })
+          )
+        )
+        .setTimeout(30)
+        .build();
+      const preparedApprove = await server.prepareTransaction(approveTx);
+      const approveSign = await signTransaction(preparedApprove.toXDR(), { networkPassphrase: Networks.TESTNET });
+      if (approveSign.error) throw new Error(approveSign.error);
+      const approveResult = await server.sendTransaction(
+        StellarSdk.TransactionBuilder.fromXDR(approveSign.signedTxXdr, Networks.TESTNET)
+      );
+      if (approveResult.status === "ERROR") throw new Error(JSON.stringify(approveResult.errorResult));
+
+      setStatus("Approving token spend...");
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const c = await server.getTransaction(approveResult.hash);
+        if (c.status === "SUCCESS") break;
+        if (c.status === "FAILED") throw new Error("Approval failed");
+      }
+
+      // Step 2: deposit
+      setStatus("Depositing...");
+      const freshAccount = await server.getAccount(walletAddress);
+      const depositTx = new TransactionBuilder(freshAccount, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+        .addOperation(
+          new Contract(CONTRACT_ID).call(
+            "deposit",
+            nativeToScVal(chamaName.replace(/ /g, "_"), { type: "symbol" }),
+            new Address(walletAddress).toScVal(),
+            new Address(tokenId).toScVal(),
+            nativeToScVal(amountInStroops, { type: "i128" })
+          )
+        )
+        .setTimeout(30)
+        .build();
+      const preparedDeposit = await server.prepareTransaction(depositTx);
+      const depositSign = await signTransaction(preparedDeposit.toXDR(), { networkPassphrase: Networks.TESTNET });
+      if (depositSign.error) throw new Error(depositSign.error);
+      const depositResult = await server.sendTransaction(
+        StellarSdk.TransactionBuilder.fromXDR(depositSign.signedTxXdr, Networks.TESTNET)
+      );
+      if (depositResult.status === "ERROR") throw new Error(JSON.stringify(depositResult.errorResult));
+
+      setStatus("Confirming deposit...");
+      let confirmed;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        confirmed = await server.getTransaction(depositResult.hash);
+        if (confirmed.status !== "NOT_FOUND") break;
+      }
+      if (confirmed.status === "SUCCESS") {
+        setStatus("Deposit successful! Tx: " + depositResult.hash);
+      } else {
+        throw new Error("Transaction failed: " + confirmed.status);
+      }
+    } catch (err) {
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
+    }
+  };
+
+  return (
+    <div>
+      <h2>Deposit</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "300px" }}>
+        <label>Chama Name</label>
+        <input
+          type="text"
+          value={chamaName}
+          onChange={(e) => setChamaName(e.target.value.replace(/ /g, "_"))}
+          placeholder="e.g. Nguruwe_Savings"
+        />
+        <label>Token Contract Address</label>
+        <input
+          type="text"
+          value={tokenId}
+          onChange={(e) => setTokenId(e.target.value.trim())}
+          placeholder="e.g. CDLZ...XYZ"
+        />
+        <label>Amount (XLM)</label>
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="e.g. 10"
+          min="0"
+        />
+        <button onClick={handleDeposit}>Deposit</button>
+        {status && <p>{status}</p>}
+      </div>
+    </div>
+  );
 }
-function ProposeWithdrawal() {
-  return <div><h2>Propose Withdrawal</h2><p>Form coming soon</p></div>;
+function ProposeWithdrawal({ walletAddress }) {
+  const [chamaName, setChamaName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [status, setStatus] = useState("");
+
+  const handlePropose = async () => {
+    if (!chamaName) { setStatus("Please enter a chama name"); return; }
+    if (!amount || isNaN(amount) || Number(amount) <= 0) { setStatus("Please enter a valid amount"); return; }
+    if (!recipient) { setStatus("Please enter a recipient address"); return; }
+    if (!walletAddress) { setStatus("Please connect wallet first"); return; }
+    try {
+      setStatus("Building transaction...");
+      const StellarSdk = await import("@stellar/stellar-sdk");
+      const { Contract, TransactionBuilder, Networks, BASE_FEE, nativeToScVal, Address } = StellarSdk;
+      const server = new StellarSdk.rpc.Server("https://soroban-testnet.stellar.org");
+      const { signTransaction } = await import("@stellar/freighter-api");
+      const amountInStroops = BigInt(Math.round(Number(amount) * 1e7));
+
+      const account = await server.getAccount(walletAddress);
+      const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+        .addOperation(
+          new Contract(CONTRACT_ID).call(
+            "propose_withdrawal",
+            nativeToScVal(chamaName.replace(/ /g, "_"), { type: "symbol" }),
+            new Address(walletAddress).toScVal(),
+            nativeToScVal(amountInStroops, { type: "i128" }),
+            new Address(recipient).toScVal()
+          )
+        )
+        .setTimeout(30)
+        .build();
+
+      const prepared = await server.prepareTransaction(tx);
+      const signResult = await signTransaction(prepared.toXDR(), { networkPassphrase: Networks.TESTNET });
+      if (signResult.error) throw new Error(signResult.error);
+      const result = await server.sendTransaction(
+        StellarSdk.TransactionBuilder.fromXDR(signResult.signedTxXdr, Networks.TESTNET)
+      );
+      if (result.status === "ERROR") throw new Error(JSON.stringify(result.errorResult));
+
+      setStatus("Confirming...");
+      let confirmed;
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        confirmed = await server.getTransaction(result.hash);
+        if (confirmed.status !== "NOT_FOUND") break;
+      }
+      if (confirmed.status === "SUCCESS") {
+        setStatus("Withdrawal proposed! Tx: " + result.hash);
+      } else {
+        throw new Error("Transaction failed: " + confirmed.status);
+      }
+    } catch (err) {
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
+    }
+  };
+
+  return (
+    <div>
+      <h2>Propose Withdrawal</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "300px" }}>
+        <label>Chama Name</label>
+        <input type="text" value={chamaName} onChange={(e) => setChamaName(e.target.value.replace(/ /g, "_"))} placeholder="e.g. Nguruwe_Savings" />
+        <label>Amount (XLM)</label>
+        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 10" min="0" />
+        <label>Recipient Address</label>
+        <input type="text" value={recipient} onChange={(e) => setRecipient(e.target.value.trim())} placeholder="e.g. GABC...XYZ" />
+        <button onClick={handlePropose}>Propose Withdrawal</button>
+        {status && <p>{status}</p>}
+      </div>
+    </div>
+  );
 }
 function ApproveWithdrawal() {
   return <div><h2>Approve Withdrawal</h2><p>Form coming soon</p></div>;
