@@ -44,8 +44,8 @@ function App() {
         {page === "addMember" && <AddMember walletAddress={walletAddress} />}
         {page === "deposit" && <Deposit walletAddress={walletAddress} />}
         {page === "propose" && <ProposeWithdrawal walletAddress={walletAddress} />}
-        {page === "approve" && <ApproveWithdrawal />}
-        {page === "view" && <ViewChama />}
+        {page === "approve" && <ApproveWithdrawal walletAddress={walletAddress} />}
+        {page === "view" && <ViewChama walletAddress={walletAddress} />}
       </div>
     </div>
   );
@@ -84,7 +84,7 @@ function CreateChama({walletAddress}) {
             new Address(walletAddress).toScVal()
           )
         )
-        .setTimeout(30)
+        .setTimeout(120)
         .build();
 
       const prepared = await server.prepareTransaction(tx);
@@ -159,7 +159,7 @@ function AddMember({ walletAddress }) {
             new Address(newMember).toScVal()
           )
         )
-        .setTimeout(30)
+        .setTimeout(120)
         .build();
 
       const prepared = await server.prepareTransaction(tx);
@@ -243,7 +243,7 @@ function Deposit({ walletAddress }) {
             nativeToScVal(ledger.sequence + 100, { type: "u32" })
           )
         )
-        .setTimeout(30)
+        .setTimeout(120)
         .build();
       const preparedApprove = await server.prepareTransaction(approveTx);
       const approveSign = await signTransaction(preparedApprove.toXDR(), { networkPassphrase: Networks.TESTNET });
@@ -274,7 +274,7 @@ function Deposit({ walletAddress }) {
             nativeToScVal(amountInStroops, { type: "i128" })
           )
         )
-        .setTimeout(30)
+        .setTimeout(120)
         .build();
       const preparedDeposit = await server.prepareTransaction(depositTx);
       const depositSign = await signTransaction(preparedDeposit.toXDR(), { networkPassphrase: Networks.TESTNET });
@@ -363,7 +363,7 @@ function ProposeWithdrawal({ walletAddress }) {
             new Address(recipient).toScVal()
           )
         )
-        .setTimeout(30)
+        .setTimeout(120)
         .build();
 
       const prepared = await server.prepareTransaction(tx);
@@ -407,11 +407,133 @@ function ProposeWithdrawal({ walletAddress }) {
     </div>
   );
 }
-function ApproveWithdrawal() {
-  return <div><h2>Approve Withdrawal</h2><p>Form coming soon</p></div>;
+function ApproveWithdrawal({ walletAddress }) {
+  const [chamaName, setChamaName] = useState("");
+  const [tokenId, setTokenId] = useState("");
+  const [status, setStatus] = useState("");
+
+  const handleApprove = async () => {
+    if (!chamaName) { setStatus("Please enter a chama name"); return; }
+    if (!tokenId) { setStatus("Please enter a token contract address"); return; }
+    if (!walletAddress) { setStatus("Please connect wallet first"); return; }
+    try {
+      setStatus("Building transaction...");
+      const StellarSdk = await import("@stellar/stellar-sdk");
+      const { Contract, TransactionBuilder, Networks, BASE_FEE, nativeToScVal, Address } = StellarSdk;
+      const server = new StellarSdk.rpc.Server("https://soroban-testnet.stellar.org");
+      const { signTransaction } = await import("@stellar/freighter-api");
+
+      const account = await server.getAccount(walletAddress);
+      const tx = new TransactionBuilder(account, { fee: "1000000", networkPassphrase: Networks.TESTNET })
+        .addOperation(
+          new Contract(CONTRACT_ID).call(
+            "approve_withdrawal",
+            nativeToScVal(chamaName.replace(/ /g, "_"), { type: "symbol" }),
+            new Address(walletAddress).toScVal(),
+            new Address(tokenId).toScVal()
+          )
+        )
+        .setTimeout(60)
+        .build();
+
+      const prepared = await server.prepareTransaction(tx);
+      const signResult = await signTransaction(prepared.toXDR(), { networkPassphrase: Networks.TESTNET });
+      if (signResult.error) throw new Error(signResult.error);
+      const result = await server.sendTransaction(
+        StellarSdk.TransactionBuilder.fromXDR(signResult.signedTxXdr, Networks.TESTNET)
+      );
+      if (result.status === "ERROR") throw new Error(JSON.stringify(result.errorResult));
+
+      setStatus("Confirming...");
+      let confirmed;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        confirmed = await server.getTransaction(result.hash);
+        if (confirmed.status !== "NOT_FOUND") break;
+      }
+      if (confirmed.status === "SUCCESS") {
+        setStatus("Approval submitted! Tx: " + result.hash);
+      } else {
+        throw new Error("Transaction failed: " + confirmed.status);
+      }
+    } catch (err) {
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
+    }
+  };
+
+  return (
+    <div>
+      <h2>Approve Withdrawal</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "300px" }}>
+        <label>Chama Name</label>
+        <input type="text" value={chamaName} onChange={(e) => setChamaName(e.target.value.replace(/ /g, "_"))} placeholder="e.g. Nguruwe_Savings" />
+        <label>Token Contract Address</label>
+        <input type="text" value={tokenId} onChange={(e) => setTokenId(e.target.value.trim())} placeholder="e.g. CDLZ...XYZ" />
+        <button onClick={handleApprove}>Approve Withdrawal</button>
+        {status && <p>{status}</p>}
+      </div>
+    </div>
+  );
 }
-function ViewChama() {
-  return <div><h2>View Chama</h2><p>Form coming soon</p></div>;
+function ViewChama({ walletAddress }) {
+  const [chamaName, setChamaName] = useState("");
+  const [chama, setChama] = useState(null);
+  const [status, setStatus] = useState("");
+
+  const handleView = async () => {
+    if (!chamaName) { setStatus("Please enter a chama name"); return; }
+    if (!walletAddress) { setStatus("Please connect wallet first"); return; }
+    try {
+      setStatus("Fetching...");
+      const StellarSdk = await import("@stellar/stellar-sdk");
+      const { Contract, nativeToScVal, scValToNative, rpc, Account, TransactionBuilder, Networks } = StellarSdk;
+      const server = new rpc.Server("https://soroban-testnet.stellar.org");
+
+      const result = await server.simulateTransaction(
+        new TransactionBuilder(
+          new Account(walletAddress, "0"),
+          { fee: "100", networkPassphrase: Networks.TESTNET }
+        )
+          .addOperation(
+            new Contract(CONTRACT_ID).call(
+              "get_chama",
+              nativeToScVal(chamaName.replace(/ /g, "_"), { type: "symbol" })
+            )
+          )
+          .setTimeout(120)
+          .build()
+      );
+
+      if (rpc.Api.isSimulationError(result)) throw new Error(result.error);
+      const data = scValToNative(result.result.retval);
+      setChama(data);
+      setStatus("");
+    } catch (err) {
+      setStatus("Error: " + (err?.message || JSON.stringify(err)));
+      setChama(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2>View Chama</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxWidth: "300px" }}>
+        <label>Chama Name</label>
+        <input type="text" value={chamaName} onChange={(e) => setChamaName(e.target.value.replace(/ /g, "_"))} placeholder="e.g. Nguruwe_Savings" />
+        <button onClick={handleView}>View</button>
+        {status && <p>{status}</p>}
+      </div>
+      {chama && (
+        <div style={{ marginTop: "20px" }}>
+          <p><strong>Name:</strong> {chama.name}</p>
+          <p><strong>Admin:</strong> {chama.admin}</p>
+          <p><strong>Balance:</strong> {(Number(chama.balance) / 1e7).toFixed(7)} XLM</p>
+          <p><strong>Members ({chama.members.length}):</strong></p>
+          <ul>{chama.members.map((m, i) => <li key={i}>{m}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default App;
