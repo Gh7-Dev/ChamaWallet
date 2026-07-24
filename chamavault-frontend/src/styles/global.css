@@ -1,0 +1,137 @@
+:root {
+  --color-primary: #1b4332;
+  --color-secondary: #40916c;
+  --color-accent: #f4a261;
+  --color-bg: #f8f9fa;
+  --color-text: #212529;
+  --color-success: #2d6a4f;
+  --color-error: #c0392b;
+  --color-white: #ffffff;
+  --color-border: #dee2e6;
+
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --font-heading: 20px;
+  --font-body: 16px;
+  --font-label: 14px;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --touch-target: 48px;
+
+  --sidebar-width: 240px;
+  --bottom-nav-height: 64px;
+  --content-max-width: 800px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 12px 0;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+h1 {
+  font-size: 28px;
+}
+
+h2 {
+  font-size: var(--font-heading);
+}
+
+p {
+  margin: 0 0 8px 0;
+}
+
+label {
+  display: block;
+  font-size: var(--font-label);
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  font-size: 16px; /* prevents iOS zoom on focus */
+  padding: 12px 14px;
+  min-height: var(--touch-target);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(64, 145, 108, 0.15);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8a939b;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+}
+
+a {
+  color: var(--color-secondary);
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
