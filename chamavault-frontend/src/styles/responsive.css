@@ -1,0 +1,58 @@
+/* Mobile-first base is defined in components.css (0px - 767px):
+   single column, bottom nav visible, full-width buttons/inputs. */
+
+/* ---------- Tablet: 768px - 1023px ---------- */
+@media (min-width: 768px) {
+  .app-main {
+    padding: 28px 24px calc(var(--bottom-nav-height) + 32px) 24px;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .welcome__tagline {
+    max-width: 420px;
+  }
+}
+
+/* ---------- Desktop: 1024px and above ---------- */
+@media (min-width: 1024px) {
+  .sidebar {
+    display: flex;
+  }
+
+  .bottom-nav {
+    display: none;
+  }
+
+  .app-main {
+    padding: 40px 40px calc(40px + var(--bottom-nav-height) - 40px) 40px;
+    padding-bottom: 40px;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .btn {
+    cursor: pointer;
+  }
+
+  .group-card:hover,
+  .stat-tile:hover {
+    box-shadow: 0 4px 16px rgba(27, 67, 50, 0.08);
+    transform: translateY(-1px);
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .stats-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
