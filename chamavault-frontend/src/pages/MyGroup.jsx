@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import GroupCard from "../components/GroupCard";
+import GroupSwitcher from "../components/GroupSwitcher";
 import LoadingState from "../components/LoadingState";
 import ErrorState from "../components/ErrorState";
-import { getChama, getLocalProposal, sanitizeSymbol } from "../stellar";
+import { getChama, getLocalProposal } from "../stellar";
 
 function MyGroup() {
   const { walletAddress, activeGroupName, setActiveGroupName, navigate } = useApp();
-  const [nameInput, setNameInput] = useState("");
   const [status, setStatus] = useState("idle"); // idle | loading | found | error
   const [chama, setChama] = useState(null);
   const [error, setError] = useState(null);
@@ -27,41 +27,9 @@ function MyGroup() {
 
   useEffect(() => {
     if (activeGroupName) load(activeGroupName);
+    else setStatus("idle");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeGroupName]);
-
-  const handleSave = (e) => {
-    e.preventDefault();
-    const name = sanitizeSymbol(nameInput);
-    if (!name) return;
-    setActiveGroupName(name);
-  };
-
-  if (!activeGroupName) {
-    return (
-      <div className="page">
-        <div className="page__header">
-          <h1>Kikundi / Group</h1>
-          <p>Weka jina la kikundi chako kuanza / Enter your group name to get started</p>
-        </div>
-        <form className="card" onSubmit={handleSave}>
-          <div className="form-group">
-            <label htmlFor="my-group-name">Jina la Kikundi / Group Name</label>
-            <input
-              id="my-group-name"
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="e.g. Nguruwe Savings"
-            />
-          </div>
-          <button className="btn btn--primary btn--full" type="submit" disabled={!nameInput.trim()}>
-            Hifadhi / Save
-          </button>
-        </form>
-      </div>
-    );
-  }
+  }, [activeGroupName, walletAddress]);
 
   const pendingCount = chama && getLocalProposal(chama.name) ? 1 : 0;
 
@@ -69,13 +37,10 @@ function MyGroup() {
     <div className="page">
       <div className="page__header">
         <h1>Kikundi Changu / My Group</h1>
-        <button
-          className="btn btn--outline"
-          onClick={() => setActiveGroupName("")}
-          style={{ minHeight: 40, padding: "8px 14px" }}
-        >
-          Badilisha kikundi / Change group
-        </button>
+      </div>
+
+      <div className="card">
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
       </div>
 
       {status === "loading" && <LoadingState />}
