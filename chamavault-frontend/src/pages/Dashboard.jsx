@@ -1,38 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import GroupCard from "../components/GroupCard";
+import GroupSwitcher from "../components/GroupSwitcher";
 import LoadingState from "../components/LoadingState";
 import ErrorState from "../components/ErrorState";
 import {
   getChama,
   getLocalProposal,
   shortenAddress,
-  sanitizeSymbol,
   stroopsToXlm,
   xlmToKes,
   formatKes,
 } from "../stellar";
 
 function Dashboard() {
-  const { walletAddress, setActiveGroupName, navigate } = useApp();
-  const [query, setQuery] = useState("");
+  const { walletAddress, activeGroupName, setActiveGroupName, navigate } = useApp();
   const [status, setStatus] = useState("idle"); // idle | loading | found | error
   const [chama, setChama] = useState(null);
   const [error, setError] = useState(null);
 
-  const pendingCount = chama && getLocalProposal(chama.name) ? 1 : 0;
-  const isMember = chama && chama.members?.includes(walletAddress);
-
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    const name = sanitizeSymbol(query);
-    if (!name) return;
+  const load = async (name) => {
     setStatus("loading");
     setError(null);
     try {
       const result = await getChama(walletAddress, name);
       setChama(result);
-      setActiveGroupName(name);
       setStatus("found");
     } catch (err) {
       setChama(null);
@@ -41,6 +33,16 @@ function Dashboard() {
     }
   };
 
+  // Auto-load on login: no search box, no typing — the stored group name
+  // (or one just entered via GroupSwitcher) loads straight away.
+  useEffect(() => {
+    if (activeGroupName) load(activeGroupName);
+    else setStatus("idle");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGroupName, walletAddress]);
+
+  const pendingCount = chama && getLocalProposal(chama.name) ? 1 : 0;
+  const isMember = chama && chama.members?.includes(walletAddress);
   const kes = chama ? xlmToKes(stroopsToXlm(chama.balance || 0)) : 0;
 
   return (
@@ -64,26 +66,14 @@ function Dashboard() {
         </div>
       </div>
 
-      <form className="card" onSubmit={handleSearch}>
-        <div className="form-group" style={{ marginBottom: 12 }}>
-          <label htmlFor="search-group">Tafuta kikundi / Search group name</label>
-          <input
-            id="search-group"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. Nguruwe Savings"
-          />
-        </div>
-        <button className="btn btn--primary btn--full" type="submit" disabled={!query.trim()}>
-          Tafuta / Search
-        </button>
-      </form>
+      <div className="card">
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
+      </div>
 
       {status === "loading" && <LoadingState />}
 
       {status === "error" && (
-        <ErrorState error={error} onRetry={handleSearch} onBack={() => setStatus("idle")} />
+        <ErrorState error={error} onRetry={() => load(activeGroupName)} />
       )}
 
       {status === "found" && chama && (
