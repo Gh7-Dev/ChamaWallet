@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../App";
+import GroupSwitcher from "../components/GroupSwitcher";
 import LoadingState from "../components/LoadingState";
 import SuccessState from "../components/SuccessState";
 import ErrorState from "../components/ErrorState";
@@ -8,15 +9,12 @@ import {
   deposit as depositCall,
   kesToXlm,
   xlmToStroops,
-  sanitizeSymbol,
   CONTRACT_ID,
-  NATIVE_TOKEN_ID,
+  XLM_TOKEN_ID,
 } from "../stellar";
 
 function Deposit() {
   const { walletAddress, activeGroupName, setActiveGroupName } = useApp();
-  const [chamaName, setChamaName] = useState(activeGroupName || "");
-  const [tokenId, setTokenId] = useState(NATIVE_TOKEN_ID);
   const [amountKes, setAmountKes] = useState("");
   const [status, setStatus] = useState("form"); // form | approving | depositing | success | error
   const [error, setError] = useState(null);
@@ -34,19 +32,17 @@ function Deposit() {
 
   const handleDeposit = async (e) => {
     e.preventDefault();
-    const name = sanitizeSymbol(chamaName);
-    if (!name || !validAmount || !tokenId.trim() || !walletAddress) return;
+    if (!activeGroupName || !validAmount || !walletAddress) return;
 
     const stroops = xlmToStroops(xlmPreview);
     try {
       setError(null);
       setStatus("approving");
-      await approveAllowance(walletAddress, tokenId.trim(), CONTRACT_ID, stroops);
+      await approveAllowance(walletAddress, XLM_TOKEN_ID, CONTRACT_ID, stroops);
 
       setStatus("depositing");
-      const result = await depositCall(walletAddress, name, tokenId.trim(), stroops);
+      const result = await depositCall(walletAddress, activeGroupName, XLM_TOKEN_ID, stroops);
 
-      setActiveGroupName(name);
       setHash(result.hash);
       setStatus("success");
     } catch (err) {
@@ -81,7 +77,7 @@ function Deposit() {
     return (
       <SuccessState
         title="Fedha imewekwa! / Funds deposited!"
-        message={`KES ${amountKes} (~${xlmPreview.toFixed(2)} XLM) imewekwa kwenye ${chamaName}`}
+        message={`KES ${amountKes} (~${xlmPreview.toFixed(2)} XLM) imewekwa kwenye ${activeGroupName}`}
         hash={hash}
         onBack={reset}
       />
@@ -98,18 +94,11 @@ function Deposit() {
         <h1>Weka Fedha / Deposit</h1>
       </div>
 
-      <form className="card" onSubmit={handleDeposit}>
-        <div className="form-group">
-          <label htmlFor="deposit-group">Jina la Kikundi / Group Name</label>
-          <input
-            id="deposit-group"
-            type="text"
-            value={chamaName}
-            onChange={(e) => setChamaName(e.target.value)}
-            placeholder="e.g. Nguruwe Savings"
-          />
-        </div>
+      <div className="card">
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
+      </div>
 
+      <form className="card" onSubmit={handleDeposit}>
         <div className="form-group">
           <label htmlFor="deposit-amount">Kiasi / Amount (KES)</label>
           <input
@@ -129,22 +118,11 @@ function Deposit() {
           </div>
         )}
 
-        <div className="form-group">
-          <label htmlFor="deposit-token">Akaunti ya Fedha / Token Contract Address</label>
-          <input
-            id="deposit-token"
-            type="text"
-            value={tokenId}
-            onChange={(e) => setTokenId(e.target.value.trim())}
-          />
-          <p className="form-hint">Imejazwa kiotomatiki / Pre-filled — usually no need to change</p>
-        </div>
-
         <div className="form-actions">
           <button
             className="btn btn--secondary btn--full"
             type="submit"
-            disabled={!chamaName.trim() || !validAmount || !tokenId.trim()}
+            disabled={!activeGroupName || !validAmount}
           >
             Weka Fedha / Deposit
           </button>
