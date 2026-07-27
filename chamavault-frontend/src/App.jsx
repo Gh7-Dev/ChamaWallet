@@ -7,9 +7,9 @@ import MyGroup from "./pages/MyGroup";
 import Deposit from "./pages/Deposit";
 import Withdrawals from "./pages/Withdrawals";
 import Admin from "./pages/Admin";
-import { isOnline } from "./stellar";
+import { isOnline, sanitizeSymbol } from "./stellar";
 
-const LAST_GROUP_KEY = "chamavault:lastGroup";
+const LAST_GROUP_KEY = "chamavault_group";
 
 const AppContext = createContext(null);
 
@@ -50,6 +50,24 @@ function App() {
     } catch {
       /* localStorage unavailable — ignore, in-memory state still works */
     }
+  }, []);
+
+  useEffect(() => {
+    // Invite links (Admin > Share Invite) look like ?group=NAME — adopt the
+    // group automatically so a new member never has to type it in.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const invited = params.get("group");
+      if (invited) {
+        setActiveGroupName(sanitizeSymbol(invited));
+        params.delete("group");
+        const rest = params.toString();
+        window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+      }
+    } catch {
+      /* no query string support — ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const disconnect = useCallback(() => {
