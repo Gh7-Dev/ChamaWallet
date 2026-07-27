@@ -9,7 +9,6 @@ import {
   scValToNative,
   Address,
   Account,
-  Asset,
   rpc,
 } from "@stellar/stellar-sdk";
 import {
@@ -27,8 +26,11 @@ export const TX_TIMEOUT = 120;
 export const POLL_INTERVAL_MS = 2000;
 export const POLL_MAX_ATTEMPTS = 60; // ~120s
 
-// Well-known SEP-41 contract id for native XLM on the current network.
-export const NATIVE_TOKEN_ID = Asset.native().contractId(NETWORK_PASSPHRASE);
+// Hardcoded SEP-41 contract id for native XLM on Stellar Testnet.
+// Verified via Asset.native().contractId(Networks.TESTNET) — do not edit
+// by hand, an invalid StrKey here breaks every deposit/approve call.
+export const XLM_TOKEN_ID =
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 let cachedServer = null;
 export function getServer() {
@@ -109,9 +111,12 @@ const ERROR_MAP = [
   [/already executed/i, "Tayari imetekelezwa / Already executed"],
   [/insufficient/i, "Salio haitoshi / Insufficient balance"],
   [/not found|missingvalue|unwrap.*none/i, "Kikundi hakipatikani / Group not found"],
-  [/user declined|rejected|not authorized to sign/i, "Umekataa ombi / Request declined"],
+  [/user rejected|user declined|not authorized to sign/i, "Ulikataa kuidhinisha / You cancelled the approval"],
   [/freighter|extension/i, "Freighter haijasakinishwa / Freighter extension not found"],
   [/failed to fetch|network|offline/i, "Hakuna mtandao / No internet connection"],
+  [/txfailed|transaction failed/i, "Malipo hayakufanikiwa, jaribu tena / Payment failed, try again"],
+  [/timeout|timed out/i, "Muda umeisha, jaribu tena / Timed out, please try again"],
+  [/hosterror/i, "Kuna tatizo la kiufundi, jaribu tena / Technical error, try again"],
 ];
 
 /** Map any raw error into a friendly bilingual message. Never leaks raw errors. */
