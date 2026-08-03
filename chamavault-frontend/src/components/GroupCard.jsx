@@ -1,27 +1,35 @@
-import { shortenAddress, stroopsToXlm, xlmToKes, formatKes } from "../stellar";
+import { getNickname, stroopsToXlm, xlmToKes, formatKes, roleFromChama, CHAMA_STATUS } from "../stellar";
+import RoleBadge from "./RoleBadge";
+import { t } from "../translations";
 
-/**
- * chama: { name, admin, balance (stroops, BigInt|number), members: string[] }
- * pendingCount: number of pending proposals to badge (optional, may be null/undefined)
- * onDeposit / onWithdraw: optional shortcut callbacks — omit to hide the action row
- */
-function GroupCard({ chama, pendingCount, onDeposit, onWithdraw, walletAddress }) {
+function GroupCard({ chama, pendingCount, onDeposit, onWithdraw, walletAddress, lang }) {
   if (!chama) return null;
+  const tr = t[lang || "en"];
 
   const xlm = stroopsToXlm(chama.balance || 0);
   const kes = xlmToKes(xlm);
-  const isAdmin = walletAddress && chama.admin === walletAddress;
+  const isActive = chama.status === CHAMA_STATUS.ACTIVE;
+  const confirmedCount = chama.members?.length || 0;
 
   return (
     <div className="group-card">
       <div className="group-card__top">
         <h3 className="group-card__name">{chama.name}</h3>
-        {typeof pendingCount === "number" && pendingCount > 0 && (
-          <span className="badge badge--accent">
-            {pendingCount} Ombi linalosubiri / Pending
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {typeof pendingCount === "number" && pendingCount > 0 && (
+            <span className="badge badge--accent">{pendingCount} {tr.pending}</span>
+          )}
+          <span className={`badge status-badge status-badge--${isActive ? "active" : "pending"}`}>
+            {isActive ? `🟢 ${tr.statusActive}` : `🟡 ${tr.statusSettingUp}`}
           </span>
-        )}
+        </div>
       </div>
+
+      {!isActive && (
+        <p className="form-hint">
+          {confirmedCount}/3 {tr.confirmedCount}
+        </p>
+      )}
 
       <div className="group-card__balance">
         <span className="group-card__balance-kes">KES {formatKes(kes)}</span>
@@ -29,23 +37,17 @@ function GroupCard({ chama, pendingCount, onDeposit, onWithdraw, walletAddress }
       </div>
 
       <div className="group-card__row">
-        <span className="group-card__row-label">Msimamizi / Admin</span>
-        <span>
-          {shortenAddress(chama.admin)}
-          {isAdmin ? " (Wewe / You)" : ""}
-        </span>
-      </div>
-      <div className="group-card__row">
-        <span className="group-card__row-label">Wanachama / Members</span>
+        <span className="group-card__row-label">{tr.totalMembers}</span>
         <span>{chama.members?.length || 0}</span>
       </div>
 
       {chama.members?.length > 0 && (
-        <div className="group-card__members">
+        <div className="member-list">
           {chama.members.map((m, i) => (
-            <span className="member-chip" key={i}>
-              {shortenAddress(m)}
-            </span>
+            <div className="member-card" key={i}>
+              <span className="member-card__name">{getNickname(m)}</span>
+              <RoleBadge role={roleFromChama(chama, m)} lang={lang} />
+            </div>
           ))}
         </div>
       )}
@@ -54,12 +56,12 @@ function GroupCard({ chama, pendingCount, onDeposit, onWithdraw, walletAddress }
         <div className="group-card__actions">
           {onDeposit && (
             <button className="btn btn--secondary" onClick={onDeposit}>
-              Weka Fedha / Deposit
+              {tr.deposit}
             </button>
           )}
           {onWithdraw && (
             <button className="btn btn--outline" onClick={onWithdraw}>
-              Omba Kutoa / Request Withdrawal
+              {tr.propose}
             </button>
           )}
         </div>

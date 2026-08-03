@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
 import { sanitizeSymbol } from "../stellar";
+import { t } from "../translations";
 
-/**
- * Shows the persisted group name as a read-only label with a
- * "Switch Group" link, or — when no group is set yet — an inline
- * one-time name entry. Used everywhere a form would otherwise need a
- * manually-typed group name field.
- */
-function GroupSwitcher({ groupName, onChange }) {
+function GroupSwitcher({ groupName, onChange, lang }) {
   const [editing, setEditing] = useState(!groupName);
   const [value, setValue] = useState(groupName || "");
+  const tr = t[lang || "en"];
 
   useEffect(() => {
     if (!groupName) setEditing(true);
@@ -26,17 +22,17 @@ function GroupSwitcher({ groupName, onChange }) {
   if (editing) {
     return (
       <form className="group-switcher group-switcher--edit" onSubmit={handleSave}>
-        <label htmlFor="group-switcher-input">Jina la Kikundi / Group Name</label>
+        <label htmlFor="group-switcher-input">{tr.groupName}</label>
         <div className="group-switcher__row">
           <input
             id="group-switcher-input"
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="e.g. Nguruwe Savings"
+            placeholder="e.g. Nguruwe_Savings"
           />
           <button className="btn btn--primary" type="submit" disabled={!value.trim()}>
-            Hifadhi / Save
+            {tr.save}
           </button>
         </div>
       </form>
@@ -46,17 +42,14 @@ function GroupSwitcher({ groupName, onChange }) {
   return (
     <div className="group-switcher">
       <span className="group-switcher__label">
-        Kikundi / Group: <strong>{groupName}</strong>
+        {tr.groupLabel}: <strong>{groupName}</strong>
       </span>
       <button
         type="button"
         className="group-switcher__link"
-        onClick={() => {
-          setValue(groupName);
-          setEditing(true);
-        }}
+        onClick={() => { setValue(groupName); setEditing(true); }}
       >
-        Badilisha Kikundi / Switch Group
+        {tr.switchGroupLink}
       </button>
     </div>
   );
