@@ -1,247 +1,282 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApp } from "../App";
 import GroupSwitcher from "../components/GroupSwitcher";
-import QrScanner from "../components/QrScanner";
-import LoadingState from "../components/LoadingState";
+import AccessGate from "../components/AccessGate";
 import SuccessState from "../components/SuccessState";
 import ErrorState from "../components/ErrorState";
-import { createChama, addMember, getChama, sanitizeSymbol, mapError } from "../stellar";
+import { roleMeta } from "../components/RoleBadge";
+import {
+  proposeChama,
+  approveJoin,
+  getChama,
+  getNickname,
+  sanitizeSymbol,
+  mapError,
+  extractErrorMessage,
+  ROLES,
+} from "../stellar";
+import { t } from "../translations";
 
-const INVITE_BASE_URL = "https://chamavault.app/join";
+const ALL_ROLES = [ROLES.CHAIRPERSON, ROLES.SECRETARY, ROLES.TREASURER];
 
-function CreateGroupSection({ walletAddress, setActiveGroupName }) {
-  const [name, setName] = useState("");
-  const [status, setStatus] = useState("form");
-  const [error, setError] = useState(null);
-  const [hash, setHash] = useState(null);
-
-  const reset = () => {
-    setStatus("form");
-    setError(null);
-    setHash(null);
-  };
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    const sanitized = sanitizeSymbol(name);
-    if (!sanitized) return;
-    try {
-      setStatus("loading");
-      setError(null);
-      const result = await createChama(walletAddress, sanitized);
-      setActiveGroupName(sanitized);
-      setHash(result.hash);
-      setStatus("success");
-    } catch (err) {
-      setError(err);
-      setStatus("error");
-    }
-  };
-
-  if (status === "loading") return <LoadingState text="Inaunda kikundi... / Creating group..." />;
-  if (status === "success") {
-    return (
-      <SuccessState
-        title="Kikundi kimeundwa! / Group created!"
-        message={`"${name}" iko tayari. Jiongeze kama mwanachama ili uweze kuomba au kuidhinisha fedha. / "${name}" is ready. Add yourself as a member so you can propose or approve withdrawals.`}
-        hash={hash}
-        onBack={reset}
-      />
-    );
-  }
-  if (status === "error") return <ErrorState error={error} onRetry={handleCreate} onBack={reset} />;
-
-  return (
-    <form className="card" onSubmit={handleCreate}>
-      <h2>Unda Kikundi / Create Group</h2>
-      <div className="form-group">
-        <label htmlFor="create-group-name">Jina la Kikundi / Group Name</label>
-        <input
-          id="create-group-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value.replace(/\s+/g, "_"))}
-          placeholder="e.g. Nguruwe_Savings"
-        />
-      </div>
-      <div className="form-actions">
-        <button className="btn btn--primary btn--full" type="submit" disabled={!name.trim()}>
-          Unda Kikundi / Create Group
-        </button>
-      </div>
-    </form>
-  );
+function inviteLabelFor(role, tr) {
+  if (role === ROLES.CHAIRPERSON) return tr.chairpersonInvite;
+  if (role === ROLES.SECRETARY) return tr.secretaryInvite;
+  return tr.treasurerInvite;
 }
 
-function AddMemberSection({ walletAddress, activeGroupName, setActiveGroupName }) {
-  const [checkStatus, setCheckStatus] = useState("idle"); // idle | checking | authorized | unauthorized | error
-  const [checkError, setCheckError] = useState(null);
-  const [memberAddress, setMemberAddress] = useState("");
-  const [scanning, setScanning] = useState(false);
-  const [status, setStatus] = useState("form");
-  const [error, setError] = useState(null);
-  const [hash, setHash] = useState(null);
-  const [inviteLink, setInviteLink] = useState("");
-  const [inviteCopied, setInviteCopied] = useState(false);
+// Built from wherever the app is actually running (localhost while
+// developing, whatever domain it's deployed to later) — a hardcoded
+// production domain would produce dead links in every other environment.
+const INVITE_BASE_URL = `${window.location.origin}/join`;
 
-  useEffect(() => {
-    if (!activeGroupName || !walletAddress) {
-      setCheckStatus("idle");
-      return undefined;
-    }
-    let cancelled = false;
-    setCheckStatus("checking");
-    setCheckError(null);
-    getChama(walletAddress, activeGroupName)
-      .then((chama) => {
-        if (cancelled) return;
-        setCheckStatus(chama.admin === walletAddress ? "authorized" : "unauthorized");
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setCheckError(err);
-        setCheckStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeGroupName, walletAddress]);
+function InviteLinkButton({ label, link, lang }) {
+  const [copied, setCopied] = useState(false);
+  const tr = t[lang];
 
-  const resetSubmit = () => {
-    setStatus("form");
-    setError(null);
-    setHash(null);
-  };
-
-  const handleAddMember = async (e) => {
-    e.preventDefault();
-    if (!activeGroupName || !memberAddress.trim()) return;
-    try {
-      setStatus("loading");
-      setError(null);
-      const result = await addMember(walletAddress, activeGroupName, memberAddress.trim());
-      setHash(result.hash);
-      setStatus("success");
-    } catch (err) {
-      setError(err);
-      setStatus("error");
-    }
-  };
-
-  const handleShareInvite = async () => {
-    const link = `${INVITE_BASE_URL}?group=${encodeURIComponent(activeGroupName)}`;
-    setInviteLink(link);
-    setInviteCopied(false);
+  const handleCopy = async () => {
+    setCopied(false);
     try {
       await navigator.clipboard.writeText(link);
-      setInviteCopied(true);
-      setTimeout(() => setInviteCopied(false), 2500);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     } catch {
       /* clipboard blocked — link still shown below for manual copy */
     }
   };
 
-  if (status === "loading") return <LoadingState text="Inaongeza mwanachama... / Adding member..." />;
-  if (status === "success") {
-    return (
-      <SuccessState
-        title="Mwanachama ameongezwa! / Member added!"
-        hash={hash}
-        onBack={() => {
-          resetSubmit();
-          setMemberAddress("");
-        }}
-      />
-    );
-  }
-  if (status === "error") return <ErrorState error={error} onRetry={handleAddMember} onBack={resetSubmit} />;
+  return (
+    <div className="invite-box">
+      <button type="button" className="btn btn--outline btn--full" onClick={handleCopy}>
+        🔗 {label}
+      </button>
+      <input className="invite-box__link" type="text" readOnly value={link} onFocus={(e) => e.target.select()} />
+      {copied && <p className="invite-box__copied">{tr.copied}</p>}
+    </div>
+  );
+}
+
+function CreateGroupFlow({ walletAddress, setActiveGroupName, lang }) {
+  const tr = t[lang];
+  const [step, setStep] = useState(1); // 1 name | 2 your role | 3 confirm | 4 invite
+  const [name, setName] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [nameError, setNameError] = useState(null);
+  const [myRole, setMyRole] = useState(ROLES.CHAIRPERSON);
+  const [createStatus, setCreateStatus] = useState("idle"); // idle | loading | error
+  const [createError, setCreateError] = useState(null);
+  const [hash, setHash] = useState(null);
+
+  const sanitized = sanitizeSymbol(name);
+  const otherRoles = ALL_ROLES.filter((r) => r !== myRole);
+
+  const handleCheckName = async (e) => {
+    e.preventDefault();
+    if (!sanitized) return;
+    setChecking(true);
+    setNameError(null);
+    try {
+      await getChama(walletAddress, sanitized);
+      setNameError(tr.nameTaken);
+    } catch (err) {
+      const msg = extractErrorMessage(err);
+      if (/not found|missingvalue|unwrap.*none/i.test(msg)) {
+        setStep(2);
+      } else {
+        setNameError(mapError(err));
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    setCreateStatus("loading");
+    setCreateError(null);
+    try {
+      const result = await proposeChama(walletAddress, sanitized, myRole);
+      setActiveGroupName(sanitized);
+      setHash(result.hash);
+      setCreateStatus("idle");
+      setStep(4);
+    } catch (err) {
+      setCreateError(err);
+      setCreateStatus("error");
+    }
+  };
+
+  const resetAll = () => {
+    setStep(1);
+    setName("");
+    setNameError(null);
+    setMyRole(ROLES.CHAIRPERSON);
+    setCreateStatus("idle");
+    setCreateError(null);
+    setHash(null);
+  };
 
   return (
     <div className="card">
-      <h2>Ongeza Mwanachama / Add Member</h2>
+      <h2>{tr.createGroupTitle}</h2>
 
-      <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
-
-      {activeGroupName && checkStatus === "checking" && (
-        <p className="form-hint">Inaangalia ruhusa... / Checking permission...</p>
-      )}
-
-      {checkStatus === "unauthorized" && (
-        <div className="notice notice--error">
-          Huna ruhusa / You don't have permission — only the group admin can add members.
+      {step < 4 && (
+        <div className="steps">
+          <div className={`step${step === 1 ? " step--active" : " step--done"}`}>{tr.stepName}</div>
+          <div className={`step${step === 2 ? " step--active" : step > 2 ? " step--done" : ""}`}>{tr.stepRole}</div>
+          <div className={`step${step === 3 ? " step--active" : ""}`}>{tr.stepConfirm}</div>
         </div>
       )}
 
-      {checkStatus === "error" && <div className="notice notice--error">{mapError(checkError)}</div>}
-
-      {checkStatus === "authorized" && (
-        <>
-          <div className="notice notice--info">Umeidhinishwa kama msimamizi / Verified as admin</div>
-
-          {scanning ? (
-            <QrScanner
-              onResult={(text) => {
-                setMemberAddress(text);
-                setScanning(false);
-              }}
-              onClose={() => setScanning(false)}
+      {step === 1 && (
+        <form onSubmit={handleCheckName}>
+          <div className="form-group">
+            <label htmlFor="create-group-name">{tr.groupName}</label>
+            <input
+              id="create-group-name"
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value.replace(/\s+/g, "_")); setNameError(null); }}
+              placeholder="e.g. Nguruwe_Savings"
             />
-          ) : (
-            <form onSubmit={handleAddMember} style={{ marginTop: 16 }}>
-              <div className="form-group">
-                <label htmlFor="new-member-address">Akaunti ya Mwanachama / Member Address</label>
-                <input
-                  id="new-member-address"
-                  type="text"
-                  value={memberAddress}
-                  onChange={(e) => setMemberAddress(e.target.value.trim())}
-                  placeholder="e.g. GABC...XYZ"
-                />
-                <button
-                  type="button"
-                  className="btn btn--outline btn--full"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setScanning(true)}
-                >
-                  📷 Changanua QR / Scan QR
-                </button>
-              </div>
-              <p className="form-hint">
-                Admin lazima ajiongeze mwenyewe / Admin must add themselves as a member to
-                propose or approve withdrawals
-              </p>
-              <div className="form-actions">
-                <button className="btn btn--secondary btn--full" type="submit" disabled={!memberAddress.trim()}>
-                  Ongeza Mwanachama / Add Member
-                </button>
-              </div>
-            </form>
-          )}
-
-          <div className="invite-box">
-            <button type="button" className="btn btn--outline btn--full" onClick={handleShareInvite}>
-              🔗 Shiriki Mwaliko / Share Invite
-            </button>
-            {inviteLink && (
-              <>
-                <input
-                  className="invite-box__link"
-                  type="text"
-                  readOnly
-                  value={inviteLink}
-                  onFocus={(e) => e.target.select()}
-                />
-                {inviteCopied && <p className="invite-box__copied">Nakiliwa! / Copied!</p>}
-              </>
-            )}
-            <p className="form-hint">
-              Mwanachama mpya akifungua kiungo hiki na kuunganisha akaunti yake, kikundi hiki
-              kitapakia moja kwa moja kwake — bado utahitaji nambari yake ya akaunti hapo juu
-              kumaliza kumwongeza. / When a new member opens this link and connects their
-              wallet, this group loads automatically for them — you'll still need their
-              account number above to finish adding them.
-            </p>
+            {nameError && <p className="field-error">{nameError}</p>}
           </div>
+          <button className="btn btn--primary btn--full" type="submit" disabled={!name.trim() || checking}>
+            {checking ? tr.checkingName : tr.next}
+          </button>
+        </form>
+      )}
+
+      {step === 2 && (
+        <div>
+          <p style={{ fontWeight: 700, marginBottom: 6 }}>{tr.roleQuestion}</p>
+          <p className="form-hint" style={{ marginBottom: 16 }}>{tr.roleExplanation}</p>
+
+          <div className="form-group">
+            <label htmlFor="my-role-select">{tr.yourRole}</label>
+            <select
+              id="my-role-select"
+              value={myRole}
+              onChange={(e) => setMyRole(e.target.value)}
+            >
+              {ALL_ROLES.map((role) => {
+                const meta = roleMeta(tr, role);
+                return (
+                  <option key={role} value={role}>
+                    {meta.icon} {meta.label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <p className="form-hint">{tr.waitingOnOthers}</p>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button className="btn btn--outline" onClick={() => setStep(1)}>{tr.back}</button>
+            <button className="btn btn--primary btn--full" onClick={() => setStep(3)}>{tr.next}</button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && createStatus !== "error" && (
+        <div>
+          <p style={{ fontWeight: 700, marginBottom: 10 }}>{tr.summary}</p>
+          <div className="summary-row">
+            <span className="summary-row__label">{tr.groupName}</span>
+            <strong>{sanitized}</strong>
+          </div>
+          <div className="summary-row">
+            <span className="summary-row__label">{tr.yourRole}</span>
+            <strong>
+              {roleMeta(tr, myRole).icon} {roleMeta(tr, myRole).label} — {getNickname(walletAddress)}
+            </strong>
+          </div>
+          <p className="form-hint" style={{ marginTop: 10 }}>{tr.waitingOnOthers}</p>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button className="btn btn--outline" onClick={() => setStep(2)} disabled={createStatus === "loading"}>
+              {tr.back}
+            </button>
+            <button className="btn btn--primary btn--full" onClick={handleCreate} disabled={createStatus === "loading"}>
+              {createStatus === "loading" ? tr.processing : tr.confirmMyRole}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && createStatus === "error" && (
+        <ErrorState error={createError} onRetry={handleCreate} onBack={() => setCreateStatus("idle")} lang={lang} />
+      )}
+
+      {step === 4 && (
+        <div>
+          <SuccessState title={tr.groupCreated} hash={hash} lang={lang} />
+          <p style={{ fontWeight: 700, marginTop: 8, marginBottom: 4 }}>{tr.shareTheseLinks}</p>
+          <p className="form-hint" style={{ marginBottom: 16 }}>{tr.activatesHint}</p>
+          {otherRoles.map((role) => (
+            <InviteLinkButton
+              key={role}
+              label={inviteLabelFor(role, tr)}
+              link={`${INVITE_BASE_URL}?group=${encodeURIComponent(sanitized)}&role=${role.toLowerCase()}`}
+              lang={lang}
+            />
+          ))}
+          <button className="btn btn--outline btn--full" style={{ marginTop: 16 }} onClick={resetAll}>
+            {tr.createNewGroup}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JoinRequestsSection({ walletAddress, activeGroupName, setActiveGroupName, activeChama, activeRole, chamaStatus, reloadChama, lang }) {
+  const tr = t[lang];
+  const [approvingAddr, setApprovingAddr] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleApprove = async (addr) => {
+    setApprovingAddr(addr);
+    setError(null);
+    try {
+      await approveJoin(walletAddress, activeGroupName, addr);
+      await reloadChama();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setApprovingAddr(null);
+    }
+  };
+
+  return (
+    <div className="card">
+      <h2>{tr.joinRequestsHeading}</h2>
+      <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} lang={lang} />
+
+      {activeGroupName && chamaStatus === "found" && activeRole !== ROLES.SECRETARY && (
+        <AccessGate reason="secretary-only" />
+      )}
+
+      {activeGroupName && chamaStatus === "found" && activeRole === ROLES.SECRETARY && (
+        <>
+          {(activeChama?.pendingMembers || []).length === 0 ? (
+            <p className="empty-state">{tr.noJoinRequests}</p>
+          ) : (
+            <div className="member-list">
+              {activeChama.pendingMembers.map((addr) => (
+                <div className="member-card" key={addr}>
+                  <span className="member-card__name">👤 {getNickname(addr)}</span>
+                  <button
+                    className="btn btn--secondary btn--sm"
+                    disabled={approvingAddr === addr}
+                    onClick={() => handleApprove(addr)}
+                  >
+                    {approvingAddr === addr ? tr.processing : tr.approveJoinBtn}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {error && <p className="field-error">{mapError(error)}</p>}
         </>
       )}
     </div>
@@ -249,18 +284,33 @@ function AddMemberSection({ walletAddress, activeGroupName, setActiveGroupName }
 }
 
 function Admin() {
-  const { walletAddress, activeGroupName, setActiveGroupName } = useApp();
+  const {
+    walletAddress,
+    activeGroupName,
+    setActiveGroupName,
+    activeChama,
+    activeRole,
+    chamaStatus,
+    reloadChama,
+    lang,
+  } = useApp();
+  const tr = t[lang];
 
   return (
     <div className="page">
       <div className="page__header">
-        <h1>Msimamizi / Admin</h1>
+        <h1>{tr.adminPage}</h1>
       </div>
-      <CreateGroupSection walletAddress={walletAddress} setActiveGroupName={setActiveGroupName} />
-      <AddMemberSection
+      <CreateGroupFlow walletAddress={walletAddress} setActiveGroupName={setActiveGroupName} lang={lang} />
+      <JoinRequestsSection
         walletAddress={walletAddress}
         activeGroupName={activeGroupName}
         setActiveGroupName={setActiveGroupName}
+        activeChama={activeChama}
+        activeRole={activeRole}
+        chamaStatus={chamaStatus}
+        reloadChama={reloadChama}
+        lang={lang}
       />
     </div>
   );
