@@ -69,6 +69,12 @@
   margin-top: 14px;
 }
 
+.btn--sm {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -81,10 +87,84 @@
   display: flex;
 }
 
+.app-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-main {
   flex: 1;
   min-width: 0;
   padding: 20px 16px calc(var(--bottom-nav-height) + 28px) 16px;
+}
+
+/* ---------- Header (logo / page title / lang toggle) ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--color-white);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 16px;
+}
+
+.app-header__logo {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.app-header__logo span {
+  color: var(--color-accent);
+}
+
+.app-header__title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-toggle {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.lang-toggle:hover {
+  background: #f4f6f5;
+}
+
+.lang-toggle--welcome {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
 }
 
 .app-content {
@@ -162,6 +242,11 @@
   font-size: 18px;
 }
 
+.sidebar__lock {
+  margin-left: auto;
+  font-size: 12px;
+}
+
 .sidebar__footer {
   border-top: 1px solid rgba(255, 255, 255, 0.15);
   padding-top: 16px;
@@ -208,6 +293,11 @@
 .bottom-nav__icon {
   font-size: 20px;
   line-height: 1;
+}
+
+.bottom-nav__lock {
+  font-size: 10px;
+  vertical-align: super;
 }
 
 .bottom-nav__label {
@@ -368,6 +458,42 @@
   border-radius: 999px;
 }
 
+.member-list {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f4f6f5;
+  border-radius: var(--radius-sm);
+}
+
+.member-card__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.member-card__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-card__badge {
+  flex-shrink: 0;
+}
+
 .group-card__actions {
   display: flex;
   gap: 10px;
@@ -447,6 +573,32 @@
 
 .welcome__install a {
   font-weight: 700;
+}
+
+/* ---------- Nickname modal (first sign-in) ---------- */
+.nickname-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 67, 50, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 200;
+}
+
+.nickname-modal {
+  background: var(--color-white);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.nickname-modal .form-group {
+  text-align: left;
 }
 
 /* ---------- Loading / Success / Error states ---------- */
@@ -628,6 +780,18 @@
   margin-bottom: 18px;
 }
 
+.group-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(64, 145, 108, 0.12);
+  color: var(--color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .empty-state {
   text-align: center;
   color: #6b7684;
@@ -761,4 +925,66 @@
   font-size: 13px;
   font-weight: 700;
   color: var(--color-success);
+}
+
+/* ---------- Role badge ---------- */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eef1f3;
+  color: #52606a;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.role-badge[data-role="Chairperson"] {
+  background: rgba(244, 162, 97, 0.18);
+  color: #a85c1f;
+}
+
+.role-badge[data-role="Secretary"] {
+  background: rgba(64, 145, 108, 0.14);
+  color: var(--color-secondary);
+}
+
+.role-badge[data-role="Treasurer"] {
+  background: rgba(27, 67, 50, 0.1);
+  color: var(--color-primary);
+}
+
+/* ---------- Group status badge ---------- */
+.status-badge--pending {
+  background: rgba(244, 162, 97, 0.18);
+  color: #a85c1f;
+}
+
+.status-badge--active {
+  background: rgba(45, 106, 79, 0.14);
+  color: var(--color-success);
+}
+
+/* ---------- Access gate (locked tab content) ---------- */
+.access-gate {
+  text-align: center;
+  padding: 32px 20px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.access-gate__icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.access-gate__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 16px;
 }
