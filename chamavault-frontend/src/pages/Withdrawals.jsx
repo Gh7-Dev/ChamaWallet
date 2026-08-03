@@ -4,28 +4,31 @@ import GroupSwitcher from "../components/GroupSwitcher";
 import LoadingState from "../components/LoadingState";
 import SuccessState from "../components/SuccessState";
 import ErrorState from "../components/ErrorState";
+import AccessGate from "../components/AccessGate";
 import {
   getChama,
   proposeWithdrawal,
   approveWithdrawal,
   kesToXlm,
   xlmToStroops,
-  shortenAddress,
   saveLocalProposal,
   recordLocalApproval,
   getLocalProposal,
+  getNickname,
   XLM_TOKEN_ID,
 } from "../stellar";
+import { t } from "../translations";
 
-function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
+function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName, lang }) {
   const [members, setMembers] = useState([]);
-  const [membersStatus, setMembersStatus] = useState("idle"); // idle | loading | loaded | error
+  const [membersStatus, setMembersStatus] = useState("idle");
   const [amountKes, setAmountKes] = useState("");
   const [recipient, setRecipient] = useState("");
   const [reason, setReason] = useState("");
   const [status, setStatus] = useState("form");
   const [error, setError] = useState(null);
   const [hash, setHash] = useState(null);
+  const tr = t[lang];
 
   useEffect(() => {
     setRecipient("");
@@ -47,20 +50,14 @@ function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
         setMembers([]);
         setMembersStatus("error");
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [activeGroupName, walletAddress]);
 
   const amountNum = Number(amountKes);
   const validAmount = amountKes && Number.isFinite(amountNum) && amountNum > 0;
   const canSubmit = activeGroupName && validAmount && recipient;
 
-  const reset = () => {
-    setStatus("form");
-    setError(null);
-    setHash(null);
-  };
+  const reset = () => { setStatus("form"); setError(null); setHash(null); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -79,27 +76,28 @@ function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
     }
   };
 
-  if (status === "loading") return <LoadingState text="Inatuma ombi... / Submitting request..." />;
+  if (status === "loading") return <LoadingState text={tr.submitting} lang={lang} />;
   if (status === "success") {
     return (
       <SuccessState
-        title="Ombi limetumwa! / Request submitted!"
-        message="Wanachama wataidhinisha ombi hili kabla ya fedha kutumwa. / Members will approve this request before funds are sent."
+        title={tr.requestSubmitted}
+        message={tr.requestSubmittedMsg}
         hash={hash}
         onBack={reset}
+        lang={lang}
       />
     );
   }
-  if (status === "error") return <ErrorState error={error} onRetry={handleSubmit} onBack={reset} />;
+  if (status === "error") return <ErrorState error={error} onRetry={handleSubmit} onBack={reset} lang={lang} />;
 
   return (
     <>
       <div className="card">
-        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} lang={lang} />
       </div>
       <form className="card" onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="propose-amount">Kiasi / Amount (KES)</label>
+          <label htmlFor="propose-amount">{tr.amount}</label>
           <input
             id="propose-amount"
             type="number"
@@ -111,10 +109,10 @@ function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
           />
         </div>
         {validAmount && (
-          <div className="amount-preview">≈ {kesToXlm(amountNum).toFixed(4)} Fedha (XLM)</div>
+          <div className="amount-preview">≈ {kesToXlm(amountNum).toFixed(4)} XLM</div>
         )}
         <div className="form-group">
-          <label htmlFor="propose-recipient">Mpokeaji / Recipient</label>
+          <label htmlFor="propose-recipient">{tr.recipient}</label>
           <select
             id="propose-recipient"
             value={recipient}
@@ -122,44 +120,35 @@ function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
             disabled={!activeGroupName || membersStatus !== "loaded" || members.length === 0}
           >
             <option value="">
-              {membersStatus === "loading"
-                ? "Inapakia wanachama... / Loading members..."
-                : "Chagua mwanachama / Select a member"}
+              {membersStatus === "loading" ? tr.loadingMembers : tr.selectMember}
             </option>
             {members.map((m) => (
               <option key={m} value={m}>
-                {shortenAddress(m)}
-                {m === walletAddress ? " (Wewe / You)" : ""}
+                👤 {getNickname(m)}{m === walletAddress ? ` (${tr.memberSince})` : ""}
               </option>
             ))}
           </select>
           {membersStatus === "error" && (
-            <p className="field-error">
-              Imeshindwa kupakia wanachama / Could not load members
-            </p>
+            <p className="field-error">{tr.couldNotLoadMembers}</p>
           )}
           {membersStatus === "loaded" && members.length === 0 && (
-            <p className="field-error">
-              Hakuna wanachama kwenye kikundi hiki / No members in this group yet
-            </p>
+            <p className="field-error">{tr.noMembersYet}</p>
           )}
         </div>
         <div className="form-group">
-          <label htmlFor="propose-reason">Sababu / Reason</label>
+          <label htmlFor="propose-reason">{tr.reason}</label>
           <textarea
             id="propose-reason"
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. School fees for members"
+            placeholder="e.g. School fees"
           />
-          <p className="form-hint">
-            Kwa taarifa tu — haihifadhiwi kwenye mfumo / For information only — not stored on chain
-          </p>
+          <p className="form-hint">{tr.reasonHint}</p>
         </div>
         <div className="form-actions">
           <button className="btn btn--secondary btn--full" type="submit" disabled={!canSubmit}>
-            Omba / Request
+            {tr.propose}
           </button>
         </div>
       </form>
@@ -167,22 +156,19 @@ function ProposeForm({ walletAddress, activeGroupName, setActiveGroupName }) {
   );
 }
 
-function ApproveForm({ walletAddress, activeGroupName, setActiveGroupName }) {
+function ApproveForm({ walletAddress, activeGroupName, setActiveGroupName, lang }) {
   const [proposal, setProposal] = useState(null);
-  const [status, setStatus] = useState("idle"); // idle | loading | success | error
+  const [status, setStatus] = useState("idle");
   const [error, setError] = useState(null);
   const [hash, setHash] = useState(null);
   const [finalized, setFinalized] = useState(false);
+  const tr = t[lang];
 
   useEffect(() => {
     setProposal(activeGroupName ? getLocalProposal(activeGroupName) : null);
   }, [activeGroupName]);
 
-  const reset = () => {
-    setStatus("idle");
-    setError(null);
-    setHash(null);
-  };
+  const reset = () => { setStatus("idle"); setError(null); setHash(null); };
 
   const handleApprove = async () => {
     if (!activeGroupName) return;
@@ -201,104 +187,115 @@ function ApproveForm({ walletAddress, activeGroupName, setActiveGroupName }) {
     }
   };
 
-  if (status === "loading") return <LoadingState text="Inathibitisha... / Confirming..." />;
+  if (status === "loading") return <LoadingState text={tr.confirming} lang={lang} />;
   if (status === "success") {
     return (
       <SuccessState
-        title={finalized ? "Fedha imetumwa! / Funds sent!" : "Imeidhinishwa! / Approved!"}
-        message={
-          finalized
-            ? "Idhini ya pili imekamilisha malipo. / The second approval completed the payment."
-            : "Inasubiri idhini nyingine moja. / Waiting for one more approval."
-        }
+        title={finalized ? tr.fundsSent : tr.approved1}
+        message={finalized ? tr.secondApprovalMsg : tr.waitingApproval}
         hash={hash}
         onBack={reset}
+        lang={lang}
       />
     );
   }
-  if (status === "error") return <ErrorState error={error} onRetry={handleApprove} onBack={reset} />;
+  if (status === "error") return <ErrorState error={error} onRetry={handleApprove} onBack={reset} lang={lang} />;
 
   return (
     <>
       <div className="card">
-        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} lang={lang} />
       </div>
 
       {activeGroupName && proposal && (
         <div className="card">
           <div className="summary-row">
-            <span className="summary-row__label">Kiasi / Amount</span>
+            <span className="summary-row__label">{tr.amount}</span>
             <strong>KES {proposal.amount}</strong>
           </div>
           <div className="summary-row">
-            <span className="summary-row__label">Mpokeaji / Recipient</span>
-            <span>{shortenAddress(proposal.recipient)}</span>
+            <span className="summary-row__label">{tr.recipient}</span>
+            <span>👤 {getNickname(proposal.recipient)}</span>
           </div>
           {proposal.reason && (
             <div className="summary-row">
-              <span className="summary-row__label">Sababu / Reason</span>
+              <span className="summary-row__label">{tr.reason}</span>
               <span>{proposal.reason}</span>
             </div>
           )}
           <div className="summary-row">
-            <span className="summary-row__label">Idhini / Approvals</span>
-            <strong>{proposal.approvals || 0}/2</strong>
+            <span className="summary-row__label">{tr.approve}</span>
+            <strong>{proposal.approvals || 0}/2 {tr.approvalOf}</strong>
           </div>
           <div className="notice notice--info" style={{ marginTop: 12 }}>
-            Inahitaji idhini 2 / Requires 2 approvals
+            {tr.requires2}
           </div>
           <button className="btn btn--secondary btn--full btn--large" onClick={handleApprove}>
-            Idhinisha / Approve
+            {tr.approve}
           </button>
         </div>
       )}
 
       {activeGroupName && !proposal && (
-        <div className="notice notice--info">
-          Hakuna ombi linalosubiri kwa sasa / No pending request right now
-        </div>
+        <div className="notice notice--info">{tr.noProposalRight}</div>
       )}
     </>
   );
 }
 
 function Withdrawals() {
-  const { walletAddress, activeGroupName, setActiveGroupName } = useApp();
+  const { walletAddress, activeGroupName, setActiveGroupName, activeRole, chamaStatus, lang } = useApp();
   const [tab, setTab] = useState("propose");
+  const tr = t[lang];
+
+  const locked = chamaStatus === "found" && !activeRole;
 
   return (
     <div className="page">
       <div className="page__header">
-        <h1>Ombi la Fedha / Withdrawal</h1>
+        <h1>{tr.withdrawal}</h1>
       </div>
 
-      <div className="segmented">
-        <button
-          className={`segmented__btn${tab === "propose" ? " segmented__btn--active" : ""}`}
-          onClick={() => setTab("propose")}
-        >
-          Omba / Request
-        </button>
-        <button
-          className={`segmented__btn${tab === "approve" ? " segmented__btn--active" : ""}`}
-          onClick={() => setTab("approve")}
-        >
-          Idhinisha / Approve
-        </button>
-      </div>
-
-      {tab === "propose" ? (
-        <ProposeForm
-          walletAddress={walletAddress}
-          activeGroupName={activeGroupName}
-          setActiveGroupName={setActiveGroupName}
-        />
+      {locked ? (
+        <>
+          <div className="card">
+            <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} lang={lang} />
+          </div>
+          <AccessGate reason="not-member" />
+        </>
       ) : (
-        <ApproveForm
-          walletAddress={walletAddress}
-          activeGroupName={activeGroupName}
-          setActiveGroupName={setActiveGroupName}
-        />
+        <>
+          <div className="segmented">
+            <button
+              className={`segmented__btn${tab === "propose" ? " segmented__btn--active" : ""}`}
+              onClick={() => setTab("propose")}
+            >
+              {tr.propose}
+            </button>
+            <button
+              className={`segmented__btn${tab === "approve" ? " segmented__btn--active" : ""}`}
+              onClick={() => setTab("approve")}
+            >
+              {tr.approve}
+            </button>
+          </div>
+
+          {tab === "propose" ? (
+            <ProposeForm
+              walletAddress={walletAddress}
+              activeGroupName={activeGroupName}
+              setActiveGroupName={setActiveGroupName}
+              lang={lang}
+            />
+          ) : (
+            <ApproveForm
+              walletAddress={walletAddress}
+              activeGroupName={activeGroupName}
+              setActiveGroupName={setActiveGroupName}
+              lang={lang}
+            />
+          )}
+        </>
       )}
     </div>
   );
