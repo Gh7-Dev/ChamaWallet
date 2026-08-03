@@ -1,14 +1,19 @@
-import { shortenAddress } from "../stellar";
+import { t } from "../translations";
 
-const LINKS = [
-  { key: "home", icon: "🏠", label: "Nyumbani / Home" },
-  { key: "group", icon: "👥", label: "Kikundi / Group" },
-  { key: "deposit", icon: "💰", label: "Weka / Deposit" },
-  { key: "withdrawals", icon: "📋", label: "Ombi / Withdrawal" },
-  { key: "admin", icon: "⚙️", label: "Msimamizi / Admin" },
-];
+const MEMBER_ONLY = new Set(["group", "deposit", "withdrawals"]);
 
-function SideNav({ active, onNavigate, walletAddress, onDisconnect }) {
+function SideNav({ active, onNavigate, walletAddress, onDisconnect, lang, nickname, activeRole }) {
+  const tr = t[lang || "en"];
+  const locked = !activeRole;
+
+  const LINKS = [
+    { key: "home",        icon: "🏠", label: tr.home },
+    { key: "group",       icon: "👥", label: tr.myGroup },
+    { key: "deposit",     icon: "💰", label: tr.deposit },
+    { key: "withdrawals", icon: "📋", label: tr.withdrawal },
+    { key: "admin",       icon: "⚙️", label: tr.admin },
+  ];
+
   return (
     <aside className="sidebar">
       <div className="sidebar__logo">
@@ -22,17 +27,22 @@ function SideNav({ active, onNavigate, walletAddress, onDisconnect }) {
             onClick={() => onNavigate(link.key)}
             aria-current={active === link.key ? "page" : undefined}
           >
-            <span className="sidebar__icon" aria-hidden="true">
-              {link.icon}
-            </span>
+            <span className="sidebar__icon" aria-hidden="true">{link.icon}</span>
             {link.label}
+            {MEMBER_ONLY.has(link.key) && locked && (
+              <span className="sidebar__lock" aria-hidden="true">🔒</span>
+            )}
           </button>
         ))}
       </nav>
       <div className="sidebar__footer">
-        <div className="sidebar__address">{shortenAddress(walletAddress)}</div>
-        <button className="btn btn--outline btn--full" onClick={onDisconnect} style={{ borderColor: "rgba(255,255,255,0.4)", color: "#fff" }}>
-          Toka / Disconnect
+        <div className="sidebar__address">👤 {nickname || "—"}</div>
+        <button
+          className="btn btn--outline btn--full"
+          onClick={onDisconnect}
+          style={{ borderColor: "rgba(255,255,255,0.4)", color: "#fff" }}
+        >
+          {tr.signOut}
         </button>
       </div>
     </aside>
