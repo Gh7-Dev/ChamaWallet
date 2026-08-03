@@ -19,7 +19,21 @@ import {
 } from "@stellar/freighter-api";
 
 export const CONTRACT_ID =
-  "CDB76V4HNBC7LIQHEJUIAUHNM4B2GSUJ6RMD6KEIC4YIRMPWXKL663QE";
+  "CCBCXYFUNTXZ5A76QPQEPHCRBOT7NQ5KXZSUUOTOTSMWRM2R7Y7EFJUI";
+
+// Mirrors the contract's Role / ChamaStatus enums, which encode over the
+// wire as plain Symbols — scValToNative hands these back as bare strings.
+export const ROLES = {
+  CHAIRPERSON: "Chairperson",
+  SECRETARY: "Secretary",
+  TREASURER: "Treasurer",
+  MEMBER: "Member",
+};
+
+export const CHAMA_STATUS = {
+  PROPOSED: "Proposed",
+  ACTIVE: "Active",
+};
 export const NETWORK_PASSPHRASE = Networks.TESTNET;
 export const RPC_URL = "https://soroban-testnet.stellar.org";
 export const TX_TIMEOUT = 120;
@@ -51,12 +65,36 @@ const STROOPS_PER_XLM = 10_000_000; // 7 decimals
 export function shortenAddress(address) {
   if (!address || typeof address !== "string") return "";
   if (address.length <= 12) return address;
-  return `${address.slice(0, 5)}...${address.slice(-4)}`;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+export function getNickname(address) {
+  try {
+    const users = JSON.parse(localStorage.getItem("chamavault_users") || "{}");
+    return users[address] || `${address.slice(0, 4)}...${address.slice(-4)}`;
+  } catch {
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
+  }
+}
+
+export function saveNickname(address, nickname) {
+  try {
+    const users = JSON.parse(localStorage.getItem("chamavault_users") || "{}");
+    users[address] = nickname.trim();
+    localStorage.setItem("chamavault_users", JSON.stringify(users));
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Replace spaces with underscores so the value is a valid Soroban Symbol. */
 export function sanitizeSymbol(value) {
   return (value || "").trim().replace(/\s+/g, "_");
+}
+
+/** Lightweight format check for a Stellar G... account address (56 chars, base32). */
+export function isValidStellarAddress(value) {
+  return typeof value === "string" && /^G[A-Z2-7]{55}$/.test(value.trim());
 }
 
 export function xlmToKes(xlm) {
@@ -107,9 +145,16 @@ export function extractErrorMessage(err) {
 }
 
 const ERROR_MAP = [
-  [/not a member/i, "Hujasajiliwa katika kikundi hiki / Not registered in this group"],
+  [/not a (chama )?member/i, "Hujasajiliwa katika kikundi hiki / Not registered in this group"],
   [/already executed/i, "Tayari imetekelezwa / Already executed"],
   [/insufficient/i, "Salio haitoshi / Insufficient balance"],
+  [/group already exists/i, "Kikundi chenye jina hilo tayari kipo / A group with that name already exists"],
+  [/chairperson already filled|secretary already filled|treasurer already filled|invalid founding role/i, "Nafasi hiyo tayari imejazwa / That role is already filled"],
+  [/only secretary can approve/i, "Katibu pekee anaweza kuidhinisha / Only the secretary can approve members"],
+  [/no pending request/i, "Hakuna ombi kutoka kwa akaunti hii / No pending request from this address"],
+  [/request already pending/i, "Ombi lako tayari linasubiri / Your request is already pending"],
+  [/group is not yet active|group already active/i, "Kikundi bado hakijawa tayari / This group isn't ready yet"],
+  [/already a member/i, "Tayari wewe ni mwanachama / You're already a member"],
   [/not found|missingvalue|unwrap.*none/i, "Kikundi hakipatikani / Group not found"],
   [/user rejected|user declined|not authorized to sign/i, "Ulikataa kuidhinisha / You cancelled the approval"],
   [/freighter|extension/i, "Freighter haijasakinishwa / Freighter extension not found"],
@@ -119,9 +164,15 @@ const ERROR_MAP = [
   [/hosterror/i, "Kuna tatizo la kiufundi, jaribu tena / Technical error, try again"],
 ];
 
-/** Map any raw error into a friendly bilingual message. Never leaks raw errors. */
+/**
+ * Map any raw error into a friendly bilingual message — the UI never
+ * renders the raw text. It IS logged to the console (dev-tools only,
+ * never on-screen) so real problems stay diagnosable during testing.
+ */
 export function mapError(err) {
   const raw = extractErrorMessage(err);
+  // eslint-disable-next-line no-console
+  console.error("[ChamaVault] contract/SDK error:", raw, err);
   for (const [pattern, friendly] of ERROR_MAP) {
     if (pattern.test(raw)) return friendly;
   }
@@ -216,20 +267,62 @@ async function submitContractCall(walletAddress, contractId, method, scArgs, opt
 // Contract calls
 // ---------------------------------------------------------------------------
 
-export async function createChama(walletAddress, chamaName) {
+// The Rust contract's fieldless enums (Role, ChamaStatus) encode over the
+// wire as a one-element Vec containing the variant name Symbol — e.g.
+// Role::Chairperson is ScVal::Vec([ScVal::Symbol("Chairperson")]), NOT a
+// bare Symbol. (Confirmed by decoding the Stellar CLI's own generated XDR
+// — its human-readable JSON output hides this wrapping, which is what led
+// to the original bug: a bare Symbol here made the contract's argument
+// decoder trap on every call.) Reads must unwrap the same way — see
+// getChama() below.
+function roleToScVal(role) {
+  return nativeToScVal([role], { type: "symbol" });
+}
+
+/**
+ * Proposes a new chama: the caller claims exactly one founding role for
+ * themselves (their own choice). The other two seats start empty — nobody
+ * ever supplies another person's address. The group stays Proposed (not
+ * usable by anyone) until two other people each fillRole their own seat.
+ */
+export async function proposeChama(walletAddress, chamaName, role) {
   const name = sanitizeSymbol(chamaName);
-  return submitContractCall(walletAddress, CONTRACT_ID, "create_chama", [
+  return submitContractCall(walletAddress, CONTRACT_ID, "propose_chama", [
+    nativeToScVal(name, { type: "symbol" }),
+    roleToScVal(role),
+    new Address(walletAddress).toScVal(),
+  ]);
+}
+
+/**
+ * Fills an empty founding seat with the CALLER'S OWN address (never
+ * someone else's) — activates the group once all three seats are filled.
+ */
+export async function fillRole(walletAddress, chamaName, role) {
+  const name = sanitizeSymbol(chamaName);
+  return submitContractCall(walletAddress, CONTRACT_ID, "fill_role", [
+    nativeToScVal(name, { type: "symbol" }),
+    new Address(walletAddress).toScVal(),
+    roleToScVal(role),
+  ]);
+}
+
+/** Requests membership in an Active group; a secretary must approve_join it. */
+export async function requestJoin(walletAddress, chamaName) {
+  const name = sanitizeSymbol(chamaName);
+  return submitContractCall(walletAddress, CONTRACT_ID, "request_join", [
     nativeToScVal(name, { type: "symbol" }),
     new Address(walletAddress).toScVal(),
   ]);
 }
 
-export async function addMember(walletAddress, chamaName, memberAddress) {
+/** Secretary-only: approves a pending join request. */
+export async function approveJoin(walletAddress, chamaName, newMemberAddress) {
   const name = sanitizeSymbol(chamaName);
-  return submitContractCall(walletAddress, CONTRACT_ID, "add_member", [
+  return submitContractCall(walletAddress, CONTRACT_ID, "approve_join", [
     nativeToScVal(name, { type: "symbol" }),
     new Address(walletAddress).toScVal(),
-    new Address(memberAddress).toScVal(),
+    new Address(newMemberAddress).toScVal(),
   ]);
 }
 
@@ -300,10 +393,40 @@ export async function getChama(walletAddress, chamaName) {
   const data = scValToNative(result.result.retval);
   return {
     name: data.name,
-    admin: data.admin,
+    chairperson: data.chairperson ?? null, // null until someone fills this seat
+    secretary: data.secretary ?? null,
+    treasurer: data.treasurer ?? null,
     balance: data.balance, // BigInt, in stroops
-    members: data.members || [],
+    members: data.members || [], // only ever contains people who've self-claimed a seat
+    // scValToNative decodes the fieldless ChamaStatus enum as ["Proposed"]
+    // or ["Active"] (a one-element array), not a bare string — unwrap it.
+    status: Array.isArray(data.status) ? data.status[0] : data.status,
+    pendingMembers: data.pending_members || [],
   };
+}
+
+/**
+ * Pure helper: derive a wallet's role from an already-loaded chama object.
+ * Every founding seat is filled by that person's own fill_role/propose_chama
+ * call, so membership and role are established atomically — there's no
+ * "named but not yet confirmed" state to account for here.
+ */
+export function roleFromChama(chama, address) {
+  if (!chama || !address || !chama.members?.includes(address)) return null;
+  if (chama.chairperson === address) return ROLES.CHAIRPERSON;
+  if (chama.secretary === address) return ROLES.SECRETARY;
+  if (chama.treasurer === address) return ROLES.TREASURER;
+  return ROLES.MEMBER;
+}
+
+export async function isMember(walletAddress, chamaName) {
+  const chama = await getChama(walletAddress, chamaName);
+  return chama.members.some((m) => m === walletAddress);
+}
+
+export async function getRole(walletAddress, chamaName) {
+  const chama = await getChama(walletAddress, chamaName);
+  return roleFromChama(chama, walletAddress);
 }
 
 // ---------------------------------------------------------------------------
