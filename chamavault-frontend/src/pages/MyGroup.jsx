@@ -1,59 +1,53 @@
-import { useEffect, useState } from "react";
 import { useApp } from "../App";
 import GroupCard from "../components/GroupCard";
 import GroupSwitcher from "../components/GroupSwitcher";
 import LoadingState from "../components/LoadingState";
 import ErrorState from "../components/ErrorState";
-import { getChama, getLocalProposal } from "../stellar";
+import AccessGate from "../components/AccessGate";
+import { getLocalProposal } from "../stellar";
+import { t } from "../translations";
 
 function MyGroup() {
-  const { walletAddress, activeGroupName, setActiveGroupName, navigate } = useApp();
-  const [status, setStatus] = useState("idle"); // idle | loading | found | error
-  const [chama, setChama] = useState(null);
-  const [error, setError] = useState(null);
+  const {
+    walletAddress,
+    activeGroupName,
+    setActiveGroupName,
+    activeChama,
+    chamaStatus,
+    chamaError,
+    activeRole,
+    reloadChama,
+    navigate,
+    lang,
+  } = useApp();
+  const tr = t[lang];
 
-  const load = async (name) => {
-    setStatus("loading");
-    setError(null);
-    try {
-      const result = await getChama(walletAddress, name);
-      setChama(result);
-      setStatus("found");
-    } catch (err) {
-      setError(err);
-      setStatus("error");
-    }
-  };
-
-  useEffect(() => {
-    if (activeGroupName) load(activeGroupName);
-    else setStatus("idle");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeGroupName, walletAddress]);
-
-  const pendingCount = chama && getLocalProposal(chama.name) ? 1 : 0;
+  const pendingCount = activeChama && getLocalProposal(activeChama.name) ? 1 : 0;
 
   return (
     <div className="page">
       <div className="page__header">
-        <h1>Kikundi Changu / My Group</h1>
+        <h1>{tr.myGroup}</h1>
       </div>
 
       <div className="card">
-        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} />
+        <GroupSwitcher groupName={activeGroupName} onChange={setActiveGroupName} lang={lang} />
       </div>
 
-      {status === "loading" && <LoadingState />}
-      {status === "error" && (
-        <ErrorState error={error} onRetry={() => load(activeGroupName)} />
+      {chamaStatus === "loading" && <LoadingState lang={lang} />}
+      {chamaStatus === "error" && <ErrorState error={chamaError} onRetry={reloadChama} lang={lang} />}
+      {chamaStatus === "notfound" && (
+        <p className="notice notice--warning">{tr.groupNotFound}</p>
       )}
-      {status === "found" && chama && (
+      {chamaStatus === "found" && !activeRole && <AccessGate reason="not-member" />}
+      {chamaStatus === "found" && activeRole && (
         <GroupCard
-          chama={chama}
+          chama={activeChama}
           pendingCount={pendingCount}
           walletAddress={walletAddress}
           onDeposit={() => navigate("deposit")}
           onWithdraw={() => navigate("withdrawals")}
+          lang={lang}
         />
       )}
     </div>
