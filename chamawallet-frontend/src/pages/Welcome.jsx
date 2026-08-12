@@ -4,7 +4,7 @@ import ErrorState from "../components/ErrorState";
 import { connectWallet, isFreighterInstalled } from "../stellar";
 import { t } from "../translations";
 
-const LANG_KEY = "chamavault_lang";
+const LANG_KEY = "chamawallet_lang";
 
 function Welcome({ onConnected, lang, setLang }) {
   const [checkingExtension, setCheckingExtension] = useState(true);
@@ -62,7 +62,7 @@ function Welcome({ onConnected, lang, setLang }) {
       </button>
 
       <div className="welcome__logo">
-        Chama<span>Vault</span>
+        Chama<span>Wallet</span>
       </div>
       <p className="welcome__tagline">{tr.tagline}</p>
 

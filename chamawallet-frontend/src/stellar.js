@@ -70,7 +70,7 @@ export function shortenAddress(address) {
 
 export function getNickname(address) {
   try {
-    const users = JSON.parse(localStorage.getItem("chamavault_users") || "{}");
+    const users = JSON.parse(localStorage.getItem("chamawallet_users") || "{}");
     return users[address] || `${address.slice(0, 4)}...${address.slice(-4)}`;
   } catch {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
@@ -79,9 +79,9 @@ export function getNickname(address) {
 
 export function saveNickname(address, nickname) {
   try {
-    const users = JSON.parse(localStorage.getItem("chamavault_users") || "{}");
+    const users = JSON.parse(localStorage.getItem("chamawallet_users") || "{}");
     users[address] = nickname.trim();
-    localStorage.setItem("chamavault_users", JSON.stringify(users));
+    localStorage.setItem("chamawallet_users", JSON.stringify(users));
   } catch {
     /* ignore */
   }
@@ -172,7 +172,7 @@ const ERROR_MAP = [
 export function mapError(err) {
   const raw = extractErrorMessage(err);
   // eslint-disable-next-line no-console
-  console.error("[ChamaVault] contract/SDK error:", raw, err);
+  console.error("[ChamaWallet] contract/SDK error:", raw, err);
   for (const [pattern, friendly] of ERROR_MAP) {
     if (pattern.test(raw)) return friendly;
   }
@@ -438,7 +438,7 @@ export async function getRole(walletAddress, chamaName) {
 // not an authoritative on-chain read.
 
 function proposalKey(chamaName) {
-  return `chamavault:proposal:${sanitizeSymbol(chamaName)}`;
+  return `chamawallet:proposal:${sanitizeSymbol(chamaName)}`;
 }
 
 export function getLocalProposal(chamaName) {

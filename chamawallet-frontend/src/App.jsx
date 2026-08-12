@@ -22,8 +22,8 @@ import {
 } from "./stellar";
 import { t } from "./translations";
 
-const LAST_GROUP_KEY = "chamavault_group";
-const LANG_KEY = "chamavault_lang";
+const LAST_GROUP_KEY = "chamawallet_group";
+const LANG_KEY = "chamawallet_lang";
 
 const AppContext = createContext(null);
 
@@ -49,7 +49,7 @@ function NicknameModal({ walletAddress, lang, onSaved }) {
     <div className="nickname-overlay">
       <div className="nickname-modal">
         <div className="welcome__logo" style={{ marginBottom: 8 }}>
-          Chama<span>Vault</span>
+          Chama<span>Wallet</span>
         </div>
         <h2 style={{ marginBottom: 4 }}>{tr.welcomeTitle}</h2>
         <p style={{ color: "#52606a", marginBottom: 20 }}>{tr.whatsYourName}</p>
@@ -101,7 +101,7 @@ function JoinAsRoleModal({ walletAddress, chamaName, role, lang, chamaStatus, on
     <div className="nickname-overlay">
       <div className="nickname-modal">
         <div className="welcome__logo" style={{ marginBottom: 8 }}>
-          Chama<span>Vault</span>
+          Chama<span>Wallet</span>
         </div>
         {status === "success" ? (
           <>
@@ -162,7 +162,7 @@ function Header({ lang, setLang, currentPage, walletAddress, onDisconnect }) {
   return (
     <header className="app-header">
       <div className="app-header__logo">
-        Chama<span>Vault</span>
+        Chama<span>Wallet</span>
       </div>
       <div className="app-header__title">
         {PAGE_TITLES[currentPage] || ""}
@@ -270,7 +270,7 @@ function App() {
   const handleWalletConnected = useCallback((address) => {
     setWalletAddress(address);
     try {
-      const users = JSON.parse(localStorage.getItem("chamavault_users") || "{}");
+      const users = JSON.parse(localStorage.getItem("chamawallet_users") || "{}");
       if (users[address]) {
         setNickname(users[address]);
         setNeedsNickname(false);

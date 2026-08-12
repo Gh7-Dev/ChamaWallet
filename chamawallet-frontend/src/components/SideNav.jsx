@@ -17,7 +17,7 @@ function SideNav({ active, onNavigate, walletAddress, onDisconnect, lang, nickna
   return (
     <aside className="sidebar">
       <div className="sidebar__logo">
-        Chama<span>Vault</span>
+        Chama<span>Wallet</span>
       </div>
       <nav className="sidebar__nav" aria-label="Main navigation">
         {LINKS.map((link) => (
