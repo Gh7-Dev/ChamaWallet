@@ -6,14 +6,14 @@ const APPROVAL_THRESHOLD: u32 = 2;
 const LEDGER_TTL: u32 = 535_000; // ~30 days
 
 #[contracttype]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChamaStatus {
     Proposed,
     Active,
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Role {
     Chairperson,
     Secretary,
