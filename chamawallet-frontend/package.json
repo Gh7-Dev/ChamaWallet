@@ -11,6 +11,7 @@
   "scripts": {
     "start": "vite",
     "build": "vite build",
+    "build:pages": "vite build --base=/ChamaWallet/",
     "preview": "vite preview"
   },
   "devDependencies": {

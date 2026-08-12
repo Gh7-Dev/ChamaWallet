@@ -26,9 +26,14 @@ function inviteLabelFor(role, tr) {
 }
 
 // Built from wherever the app is actually running (localhost while
-// developing, whatever domain it's deployed to later) — a hardcoded
+// developing, GitHub Pages or wherever it's deployed) — a hardcoded
 // production domain would produce dead links in every other environment.
-const INVITE_BASE_URL = `${window.location.origin}/join`;
+// Points at the app's own root (not a /join sub-path) plus BASE_URL, since
+// static hosts like GitHub Pages don't do SPA fallback routing for
+// arbitrary paths — the app reads ?group=/&role= from location.search
+// regardless of path, so the root URL works everywhere without relying on
+// server-side routing at all.
+const INVITE_BASE_URL = `${window.location.origin}${import.meta.env.BASE_URL}`;
 
 function InviteLinkButton({ label, link, lang }) {
   const [copied, setCopied] = useState(false);
