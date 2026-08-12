@@ -6,8 +6,8 @@ use soroban_sdk::{testutils::Address as _, Env};
 fn test_propose_chama() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let name = Symbol::new(&env, "TestChama");
 
@@ -27,8 +27,8 @@ fn test_propose_chama() {
 fn test_proposer_can_pick_any_role() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let treasurer = Address::generate(&env);
     let name = Symbol::new(&env, "TestChama");
 
@@ -43,8 +43,8 @@ fn test_proposer_can_pick_any_role() {
 fn test_fill_role_activates_group() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let secretary = Address::generate(&env);
     let treasurer = Address::generate(&env);
@@ -70,8 +70,8 @@ fn test_fill_role_activates_group() {
 fn test_fill_role_rejects_taken_seat() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let secretary1 = Address::generate(&env);
     let secretary2 = Address::generate(&env);
@@ -87,8 +87,8 @@ fn test_fill_role_rejects_taken_seat() {
 fn test_request_join_before_active_panics() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let requester = Address::generate(&env);
     let name = Symbol::new(&env, "TestChama");
@@ -101,8 +101,8 @@ fn test_request_join_before_active_panics() {
 fn test_request_and_approve_join() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let secretary = Address::generate(&env);
     let treasurer = Address::generate(&env);
@@ -130,8 +130,8 @@ fn test_request_and_approve_join() {
 fn test_approve_join_requires_secretary() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(ChamaVault, ());
-    let client = ChamaVaultClient::new(&env, &contract_id);
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
     let chairperson = Address::generate(&env);
     let secretary = Address::generate(&env);
     let treasurer = Address::generate(&env);

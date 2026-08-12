@@ -83,10 +83,10 @@ fn set_member_role(env: &Env, name: &Symbol, member: &Address, role: &Role) {
 }
 
 #[contract]
-pub struct ChamaVault;
+pub struct ChamaWallet;
 
 #[contractimpl]
-impl ChamaVault {
+impl ChamaWallet {
     /// Proposes a new chama: the caller claims exactly one founding role
     /// for themselves (their choice — Chairperson, Secretary, or
     /// Treasurer). The other two seats start empty. The group is Proposed
