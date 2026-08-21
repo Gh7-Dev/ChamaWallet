@@ -14,10 +14,18 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
+// CSRF note: this is a stateless JSON API consumed by a browser extension
+// (Freighter) — no cookies or sessions are used. All mutating routes require
+// either a signed XDR blob (sponsor) or an Authorization: Bearer token
+// (admin routes), so CSRF does not apply.
+
 /**
  * Load admin authentication token from environment
  */
 const adminAuthToken = process.env.ADMIN_AUTH_TOKEN;
+
+/** Strip newline/carriage-return characters to prevent log injection (CWE-117). */
+const sanitizeLog = (s: string): string => String(s).replace(/[\r\n]/g, ' ');
 
 /**
  * Admin authentication middleware
@@ -106,7 +114,7 @@ app.post('/api/v1/relayer/sponsor', async (req: Request, res: Response, next: Ne
     if (floatRecord.status === 'Locked' || floatRecord.opexFloat < config.minFloatThresholdKes) {
       res.status(403).json({
         success: false,
-        error: `Sponsorship rejected: Chama '${chamaId}' has insufficient float balance (${floatRecord.opexFloat.toFixed(2)} KES). Minimum required threshold is ${config.minFloatThresholdKes} KES. Please top up.`,
+        error: `Sponsorship rejected: Chama '${sanitizeLog(chamaId)}' has insufficient float balance (${floatRecord.opexFloat.toFixed(2)} KES). Minimum required threshold is ${config.minFloatThresholdKes} KES. Please top up.`,
         opexFloat: floatRecord.opexFloat,
         thresholdStatus: 'Locked',
       });

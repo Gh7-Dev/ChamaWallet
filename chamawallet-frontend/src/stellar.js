@@ -18,9 +18,10 @@ import {
   signTransaction,
 } from "@stellar/freighter-api";
 
+// Public testnet contract address — not a secret, safe to hardcode as fallback.
 export const CONTRACT_ID =
   import.meta.env.VITE_CONTRACT_ID ||
-  "CCBCXYFUNTXZ5A76QPQEPHCRBOT7NQ5KXZSUUOTOTSMWRM2R7Y7EFJUI";
+  "CCBCXYFUNTXZ5A76QPQEPHCRBOT7NQ5KXZSUUOTOTSMWRM2R7Y7EFJUI"; // nosec
 
 // Mirrors the contract's Role / ChamaStatus enums, which encode over the
 // wire as plain Symbols — scValToNative hands these back as bare strings.
@@ -41,12 +42,12 @@ export const TX_TIMEOUT = 120;
 export const POLL_INTERVAL_MS = 2000;
 export const POLL_MAX_ATTEMPTS = 60; // ~120s
 
-// SEP-41 contract id for native XLM on Stellar Testnet.
+// Public SEP-41 contract address for native XLM on Testnet — not a secret.
 // Verified via Asset.native().contractId(Networks.TESTNET) — do not edit
 // by hand, an invalid StrKey here breaks every deposit/approve call.
 export const XLM_TOKEN_ID =
   import.meta.env.VITE_XLM_TOKEN_ID ||
-  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"; // nosec
 
 let cachedServer = null;
 export function getServer() {

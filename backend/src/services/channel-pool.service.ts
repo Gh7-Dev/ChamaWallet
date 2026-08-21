@@ -6,6 +6,9 @@ export interface ChannelAccount {
   isLocked: boolean;
 }
 
+/** Strip newline/carriage-return characters to prevent log injection (CWE-117). */
+const sanitizeLog = (s: string): string => String(s).replace(/[\r\n]/g, ' ');
+
 class ChannelPoolService {
   private channels: ChannelAccount[] = [];
 
@@ -61,9 +64,9 @@ class ChannelPoolService {
     const channel = this.channels.find((c) => c.keypair.publicKey() === publicKey);
     if (channel) {
       channel.isLocked = false;
-      console.log(`Released Channel Account: ${publicKey}`);
+      console.log(`Released Channel Account: ${sanitizeLog(publicKey)}`);
     } else {
-      console.warn(`Attempted to release a channel account that does not belong to the pool: ${publicKey}`);
+      console.warn(`Attempted to release a channel account that does not belong to the pool: ${sanitizeLog(publicKey)}`);
     }
   }
 

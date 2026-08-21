@@ -1,6 +1,5 @@
 #![no_std]
-#[allow(deprecated)]
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractevent, contractimpl, contracttype, Address, Env, Symbol, Vec};
 use soroban_sdk::token::Client as TokenClient;
 const APPROVAL_THRESHOLD: u32 = 2;
 const LEDGER_TTL: u32 = 535_000; // ~30 days
@@ -51,6 +50,48 @@ enum DataKey {
     ChamaData(Symbol),
     Proposal(Symbol),
     MemberRole(Symbol, Address),
+}
+
+#[contractevent]
+pub struct GroupProposedEvent {
+    #[topic]
+    pub name: Symbol,
+    pub proposer: Address,
+}
+
+#[contractevent]
+pub struct RoleFilledEvent {
+    #[topic]
+    pub chama_name: Symbol,
+    pub address: Address,
+}
+
+#[contractevent]
+pub struct JoinApprovedEvent {
+    #[topic]
+    pub chama_name: Symbol,
+    pub new_member: Address,
+}
+
+#[contractevent]
+pub struct DepositedEvent {
+    #[topic]
+    pub name: Symbol,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct WithdrawalProposedEvent {
+    #[topic]
+    pub chama_name: Symbol,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct WithdrawalApprovedEvent {
+    #[topic]
+    pub chama_name: Symbol,
+    pub approver: Address,
 }
 
 fn get_chama_data(env: &Env, name: &Symbol) -> Chama {
@@ -123,7 +164,7 @@ impl ChamaWallet {
         }
         set_chama_data(&env, &name, &chama);
         set_member_role(&env, &name, &address, &role);
-        env.events().publish((Symbol::new(&env, "proposed_group"), name), address);
+        GroupProposedEvent { name, proposer: address }.publish(&env);
     }
 
     /// Fills an empty founding seat (Secretary or Treasurer, or Chairperson
@@ -170,7 +211,7 @@ impl ChamaWallet {
         }
 
         set_chama_data(&env, &chama_name, &chama);
-        env.events().publish((Symbol::new(&env, "role_filled"), chama_name), address);
+        RoleFilledEvent { chama_name, address }.publish(&env);
     }
 
     /// Requests membership in an Active group. The secretary must approve
@@ -212,7 +253,7 @@ impl ChamaWallet {
         set_member_role(&env, &chama_name, &new_member, &Role::Member);
 
         set_chama_data(&env, &chama_name, &chama);
-        env.events().publish((Symbol::new(&env, "join_approved"), chama_name), new_member);
+        JoinApprovedEvent { chama_name, new_member }.publish(&env);
     }
 
     pub fn deposit(env: Env, name: Symbol, from: Address, token_id: Address, amount: i128) {
@@ -227,7 +268,7 @@ impl ChamaWallet {
         TokenClient::new(&env, &token_id).transfer(&from, &env.current_contract_address(), &amount);
         chama.balance += amount;
         set_chama_data(&env, &name, &chama);
-        env.events().publish((Symbol::new(&env, "deposited"), name), &amount)
+        DepositedEvent { name, amount }.publish(&env);
     }
 
     pub fn propose_withdrawal(env: Env, chama_name: Symbol, proposer: Address, amount: i128, recipient: Address) {
@@ -244,7 +285,7 @@ impl ChamaWallet {
             executed: false,
         };
         set_proposal(&env, &chama_name, &proposal);
-        env.events().publish((Symbol::new(&env, "proposed"), &chama_name), &amount)
+        WithdrawalProposedEvent { chama_name, amount }.publish(&env);
     }
 
     pub fn approve_withdrawal(env: Env, chama_name: Symbol, approver: Address, token_id: Address) {
@@ -267,7 +308,7 @@ impl ChamaWallet {
             proposal.executed = true;
         }
         set_proposal(&env, &chama_name, &proposal);
-        env.events().publish((Symbol::new(&env, "Approved"), chama_name), &approver);
+        WithdrawalApprovedEvent { chama_name, approver }.publish(&env);
     }
 
     pub fn get_chama(env: Env, chama_name: Symbol) -> Chama {

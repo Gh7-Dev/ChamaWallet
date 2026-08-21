@@ -6,6 +6,9 @@ import { config } from '../config';
  * Audits total transaction fee usage vs. micro-fee contributions in the last 30 days,
  * records a reconciliation log, and flags groups operating near their safety threshold.
  */
+/** Strip newline/carriage-return characters to prevent log injection (CWE-117). */
+const sanitizeLog = (s: string): string => String(s).replace(/[\r\n]/g, ' ');
+
 export async function reconcileChama(chamaId: string): Promise<{
   chamaId: string;
   totalUsageKes: number;
@@ -38,13 +41,13 @@ export async function reconcileChama(chamaId: string): Promise<{
 
   if (alertFlagged) {
     console.warn(
-      `[RECONCILIATION ALERT] Chama ${chamaId} is operating near its safety threshold! ` +
+      `[RECONCILIATION ALERT] Chama ${sanitizeLog(chamaId)} is operating near its safety threshold! ` +
       `Current Float: ${floatRecord.opexFloat.toFixed(2)} KES (Threshold: ${config.minFloatThresholdKes} KES). ` +
       `Please top up during the next meeting cycle.`
     );
   } else {
     console.log(
-      `[RECONCILIATION SUCCESS] Chama ${chamaId} reconciled successfully. ` +
+      `[RECONCILIATION SUCCESS] Chama ${sanitizeLog(chamaId)} reconciled successfully. ` +
       `Current Float: ${floatRecord.opexFloat.toFixed(2)} KES.`
     );
   }
@@ -72,7 +75,7 @@ export async function runAllReconciliations(): Promise<any[]> {
       const result = await reconcileChama(id);
       results.push(result);
     } catch (err: any) {
-      console.error(`[RECONCILIATION ERROR] Failed to reconcile Chama ${id}:`, err.message);
+      console.error(`[RECONCILIATION ERROR] Failed to reconcile Chama ${sanitizeLog(id)}:`, err.message);
     }
   }
 
