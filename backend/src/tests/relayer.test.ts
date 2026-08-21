@@ -236,22 +236,23 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
   describe('Channel Pool Parallel Handling', () => {
     it('should acquire and lock channels to enable concurrency without sequence collision', async () => {
       const status = channelPoolService.getPoolStatus();
-      expect(status.total).toBe(5);
-      expect(status.available).toBe(5);
+      const poolSize = status.total; // 3 funded channel accounts from .env
+      expect(poolSize).toBeGreaterThanOrEqual(1);
+      expect(status.available).toBe(poolSize);
 
       const keypair1 = await channelPoolService.acquireChannel();
       const keypair2 = await channelPoolService.acquireChannel();
 
       const updatedStatus = channelPoolService.getPoolStatus();
       expect(updatedStatus.locked).toBe(2);
-      expect(updatedStatus.available).toBe(3);
+      expect(updatedStatus.available).toBe(poolSize - 2);
 
       channelPoolService.releaseChannel(keypair1.publicKey());
       channelPoolService.releaseChannel(keypair2.publicKey());
 
       const finalStatus = channelPoolService.getPoolStatus();
       expect(finalStatus.locked).toBe(0);
-      expect(finalStatus.available).toBe(5);
+      expect(finalStatus.available).toBe(poolSize);
     });
   });
 
