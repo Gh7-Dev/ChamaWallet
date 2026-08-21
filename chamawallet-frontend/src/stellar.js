@@ -19,6 +19,7 @@ import {
 } from "@stellar/freighter-api";
 
 export const CONTRACT_ID =
+  import.meta.env.VITE_CONTRACT_ID ||
   "CCBCXYFUNTXZ5A76QPQEPHCRBOT7NQ5KXZSUUOTOTSMWRM2R7Y7EFJUI";
 
 // Mirrors the contract's Role / ChamaStatus enums, which encode over the
@@ -40,10 +41,11 @@ export const TX_TIMEOUT = 120;
 export const POLL_INTERVAL_MS = 2000;
 export const POLL_MAX_ATTEMPTS = 60; // ~120s
 
-// Hardcoded SEP-41 contract id for native XLM on Stellar Testnet.
+// SEP-41 contract id for native XLM on Stellar Testnet.
 // Verified via Asset.native().contractId(Networks.TESTNET) — do not edit
 // by hand, an invalid StrKey here breaks every deposit/approve call.
 export const XLM_TOKEN_ID =
+  import.meta.env.VITE_XLM_TOKEN_ID ||
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 let cachedServer = null;
@@ -54,8 +56,46 @@ export function getServer() {
   return cachedServer;
 }
 
-const KES_PER_XLM = 18.5;
+const KES_PER_XLM = Number(import.meta.env.VITE_KES_PER_XLM) || 15;
+const RELAYER_URL = import.meta.env.VITE_RELAYER_URL || null;
 const STROOPS_PER_XLM = 10_000_000; // 7 decimals
+
+// ---------------------------------------------------------------------------
+// Relayer integration
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt to sponsor a signed transaction XDR through the backend relayer.
+ * If VITE_RELAYER_URL is not set, or the relayer rejects (non-2xx), falls
+ * back to direct submission so the user can still pay their own fee.
+ *
+ * Returns { hash, ledger } on relayer success, or null to signal fallback.
+ */
+export async function sponsorTransaction(walletAddress, chamaId, signedXdr) {
+  if (!RELAYER_URL) return null;
+  try {
+    const res = await fetch(`${RELAYER_URL}/api/v1/relayer/sponsor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chamaId,
+        memberAddress: walletAddress,
+        transactionXdr: signedXdr,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      // eslint-disable-next-line no-console
+      console.warn("[ChamaWallet] Relayer declined sponsorship:", body.error);
+      return null;
+    }
+    return await res.json(); // { success, txHash, ledger }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[ChamaWallet] Relayer unreachable, falling back to direct submission:", err);
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -253,6 +293,17 @@ async function submitContractCall(walletAddress, contractId, method, scArgs, opt
   if (signResult?.error) throw new Error(extractErrorMessage(signResult.error));
   const { signedTxXdr } = signResult;
 
+  // Attempt relayer sponsorship first; fall back to direct submission if
+  // the relayer is unavailable, rate-limited, or the float is locked.
+  const chamaId = opts.chamaId || null;
+  if (chamaId) {
+    const sponsored = await sponsorTransaction(walletAddress, chamaId, signedTxXdr);
+    if (sponsored?.success) {
+      return { hash: sponsored.txHash, confirmed: { ledger: sponsored.ledger } };
+    }
+  }
+
+  // Direct submission fallback
   const txToSubmit = TransactionBuilder.fromXDR(signedTxXdr, NETWORK_PASSPHRASE);
   const sendResult = await server.sendTransaction(txToSubmit);
   if (sendResult.status === "ERROR") {
@@ -344,7 +395,7 @@ export async function deposit(walletAddress, chamaName, tokenId, amount) {
     new Address(walletAddress).toScVal(),
     new Address(tokenId).toScVal(),
     nativeToScVal(amount, { type: "i128" }),
-  ]);
+  ], { chamaId: name });
 }
 
 export async function proposeWithdrawal(walletAddress, chamaName, amount, recipient) {
@@ -354,7 +405,7 @@ export async function proposeWithdrawal(walletAddress, chamaName, amount, recipi
     new Address(walletAddress).toScVal(),
     nativeToScVal(amount, { type: "i128" }),
     new Address(recipient).toScVal(),
-  ]);
+  ], { chamaId: name });
 }
 
 export async function approveWithdrawal(walletAddress, chamaName, tokenId) {
@@ -363,7 +414,7 @@ export async function approveWithdrawal(walletAddress, chamaName, tokenId) {
     nativeToScVal(name, { type: "symbol" }),
     new Address(walletAddress).toScVal(),
     new Address(tokenId).toScVal(),
-  ]);
+  ], { chamaId: name });
 }
 
 /** Read-only: fetch a chama's data via simulateTransaction (no signing, no fee). */

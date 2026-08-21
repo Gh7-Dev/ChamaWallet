@@ -43,6 +43,7 @@ pub struct Proposal {
     pub amount: i128,
     pub recipient: Address,
     pub approvals: u32,
+    pub approvers: Vec<Address>,
     pub executed: bool,
 }
 #[contracttype]
@@ -217,6 +218,12 @@ impl ChamaWallet {
     pub fn deposit(env: Env, name: Symbol, from: Address, token_id: Address, amount: i128) {
         from.require_auth();
         let mut chama = get_chama_data(&env, &name);
+        if chama.status != ChamaStatus::Active {
+            panic!("Group is not active");
+        }
+        if !chama.members.contains(&from) {
+            panic!("Not a chama member");
+        }
         TokenClient::new(&env, &token_id).transfer(&from, &env.current_contract_address(), &amount);
         chama.balance += amount;
         set_chama_data(&env, &name, &chama);
@@ -229,7 +236,13 @@ impl ChamaWallet {
         if !chama.members.contains(&proposer) {
             panic!("Not a chama member");
         }
-        let proposal = Proposal { amount, recipient, approvals: 0, executed: false };
+        let proposal = Proposal {
+            amount,
+            recipient,
+            approvals: 0,
+            approvers: Vec::new(&env),
+            executed: false,
+        };
         set_proposal(&env, &chama_name, &proposal);
         env.events().publish((Symbol::new(&env, "proposed"), &chama_name), &amount)
     }
@@ -244,6 +257,10 @@ impl ChamaWallet {
         if proposal.executed {
             panic!("Withdrawal already executed");
         }
+        if proposal.approvers.contains(&approver) {
+            panic!("Already approved");
+        }
+        proposal.approvers.push_back(approver.clone());
         proposal.approvals += 1;
         if proposal.approvals >= APPROVAL_THRESHOLD {
             TokenClient::new(&env, &token_id).transfer(&env.current_contract_address(), &proposal.recipient, &proposal.amount);

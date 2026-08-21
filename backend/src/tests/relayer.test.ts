@@ -68,7 +68,7 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
 
   describe('POST /api/v1/relayer/sponsor', () => {
     it('should successfully sponsor an allowlisted function (e.g., execute)', async () => {
-      const validXdr = generateMockSorobanXdr('execute');
+      const validXdr = generateMockSorobanXdr('propose_withdrawal');
 
       const response = await request(app)
         .post('/api/v1/relayer/sponsor')
@@ -84,10 +84,10 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
       expect(response.body.ledger).toBeDefined();
 
       // Check float status update:
-      // Real or mocked simulation takes 150,000 Stroops = 0.015 XLM = 0.225 KES (assuming 15 KES per XLM).
-      // Since it is 'execute', there are no micro-fee contributions, so float decreases by 0.225 KES.
+      // propose_withdrawal: fee paid -0.225 KES, micro-fee contribution +2.00 KES
+      // Net: 1000 - 0.225 + 2.00 = 1001.775 KES
       const statusRes = await request(app).get(`/api/v1/chama/${testChamaId}/float-status`);
-      expect(statusRes.body.opexFloat).toBeLessThan(1000);
+      expect(statusRes.body.opexFloat).toBe(1001.775);
       expect(statusRes.body.totalSponsoredToday).toBe(1);
     });
 
@@ -154,7 +154,7 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
       expect(statusRes.body.thresholdStatus).toBe('Locked');
 
       // 2. Try to sponsor
-      const validXdr = generateMockSorobanXdr('execute');
+      const validXdr = generateMockSorobanXdr('propose_withdrawal');
       const response = await request(app)
         .post('/api/v1/relayer/sponsor')
         .send({
@@ -171,7 +171,7 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
 
     it('should enforce daily per-member rate limit (max 5 transactions per 24 hours)', async () => {
       await dbService.createChama(testChamaId, 'Turkana Savings 1', 2000.00);
-      const validXdr = generateMockSorobanXdr('execute');
+      const validXdr = generateMockSorobanXdr('propose_withdrawal');
 
       // Submit 5 successful transactions
       for (let i = 0; i < 5; i++) {
@@ -202,7 +202,7 @@ describe('ChamaVault Fee Relayer & Sponsorship Service Tests', () => {
 
     it('should enforce daily per-Chama rate limit (max 20 transactions per 24 hours)', async () => {
       await dbService.createChama(testChamaId, 'Turkana Savings 1', 5000.00);
-      const validXdr = generateMockSorobanXdr('execute');
+      const validXdr = generateMockSorobanXdr('propose_withdrawal');
 
       // Submit 20 successful transactions from different member addresses
       for (let i = 0; i < 20; i++) {

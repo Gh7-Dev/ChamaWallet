@@ -144,3 +144,41 @@ fn test_approve_join_requires_secretary() {
     client.request_join(&name, &requester);
     client.approve_join(&name, &treasurer, &requester);
 }
+
+#[test]
+#[should_panic(expected = "Already approved")]
+fn test_approve_withdrawal_rejects_double_vote() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
+    let chairperson = Address::generate(&env);
+    let secretary = Address::generate(&env);
+    let treasurer = Address::generate(&env);
+    let token = Address::generate(&env);
+    let name = Symbol::new(&env, "TestChama");
+
+    client.propose_chama(&name, &Role::Chairperson, &chairperson);
+    client.fill_role(&name, &secretary, &Role::Secretary);
+    client.fill_role(&name, &treasurer, &Role::Treasurer);
+    client.propose_withdrawal(&name, &chairperson, &100, &treasurer);
+    client.approve_withdrawal(&name, &chairperson, &token);
+    // Second approval from the same address must panic
+    client.approve_withdrawal(&name, &chairperson, &token);
+}
+
+#[test]
+#[should_panic(expected = "Group is not active")]
+fn test_deposit_requires_active_group() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(ChamaWallet, ());
+    let client = ChamaWalletClient::new(&env, &contract_id);
+    let chairperson = Address::generate(&env);
+    let token = Address::generate(&env);
+    let name = Symbol::new(&env, "TestChama");
+
+    // Group is still Proposed — only chairperson seat filled
+    client.propose_chama(&name, &Role::Chairperson, &chairperson);
+    client.deposit(&name, &chairperson, &token, &500);
+}

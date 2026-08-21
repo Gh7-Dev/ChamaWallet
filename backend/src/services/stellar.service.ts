@@ -5,10 +5,14 @@ import {
   Transaction,
   FeeBumpTransaction,
   Address,
-  xdr
+  xdr,
+  rpc,
 } from '@stellar/stellar-sdk';
 import { config } from '../config';
 import { channelPoolService } from './channel-pool.service';
+
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS = 60; // ~120s
 
 export interface DecodedTxInfo {
   contractId: string;
@@ -19,16 +23,20 @@ export interface DecodedTxInfo {
 class StellarService {
   private networkPassphrase: string;
   private allowedFunctions = new Set([
-    'deploy_account',
-    'execute',
+    'propose_chama',
+    'fill_role',
+    'request_join',
+    'approve_join',
+    'deposit',
     'propose_withdrawal',
     'approve_withdrawal',
-    'propose_reset_signer',
-    'execute_reset_signer'
   ]);
+
+  private server: rpc.Server;
 
   constructor() {
     this.networkPassphrase = config.stellarNetwork === 'MAINNET' ? Networks.PUBLIC : Networks.TESTNET;
+    this.server = new rpc.Server(config.stellarRpcUrl);
   }
 
   /**
@@ -100,7 +108,8 @@ class StellarService {
   }
 
   /**
-   * Performs Soroban pre-flight simulation to estimate CPU, storage, and resource limits
+   * Performs Soroban pre-flight simulation via RPC to estimate fees.
+   * Falls back to a safe conservative estimate if simulation fails.
    */
   public async simulateAndEstimateFees(transactionXdr: string): Promise<{
     minFeeStroops: number;
@@ -108,40 +117,30 @@ class StellarService {
     feeKes: number;
     simulatedSuccess: boolean;
   }> {
+    // Test/in-memory mode: return deterministic mock so unit tests stay fast
+    if (config.nodeEnv === 'test' || config.useInMemoryDb) {
+      const minFeeStroops = 150000;
+      const feeXlm = minFeeStroops / 10_000_000;
+      return { minFeeStroops, feeXlm, feeKes: feeXlm * config.kesPerXlm, simulatedSuccess: true };
+    }
+
     try {
-      if (config.nodeEnv === 'test' || config.useInMemoryDb) {
-        // High quality mock response for unit tests to ensure deterministic and fast execution
-        const minFeeStroops = 150000; // 0.15 XLM
-        const feeXlm = minFeeStroops / 10000000;
-        const feeKes = feeXlm * config.kesPerXlm;
-        return {
-          minFeeStroops,
-          feeXlm,
-          feeKes,
-          simulatedSuccess: true
-        };
+      const tx = TransactionBuilder.fromXDR(transactionXdr, this.networkPassphrase);
+      if (!(tx instanceof Transaction)) {
+        throw new Error('Cannot simulate a fee-bump envelope');
       }
-      
-      const minFeeStroops = 100000; // Default minimum fallback (0.1 XLM)
-      const feeXlm = minFeeStroops / 10000000;
-      const feeKes = feeXlm * config.kesPerXlm;
-      return {
-        minFeeStroops,
-        feeXlm,
-        feeKes,
-        simulatedSuccess: true
-      };
+      const simResult = await this.server.simulateTransaction(tx);
+      if (rpc.Api.isSimulationError(simResult)) {
+        throw new Error(`Simulation error: ${simResult.error}`);
+      }
+      const minFeeStroops = parseInt((simResult as rpc.Api.SimulateTransactionSuccessResponse).minResourceFee, 10);
+      const feeXlm = minFeeStroops / 10_000_000;
+      return { minFeeStroops, feeXlm, feeKes: feeXlm * config.kesPerXlm, simulatedSuccess: true };
     } catch (err) {
-      console.warn('RPC Simulation failed, using safe estimations:', err);
-      const minFeeStroops = 200000;
-      const feeXlm = minFeeStroops / 10000000;
-      const feeKes = feeXlm * config.kesPerXlm;
-      return {
-        minFeeStroops,
-        feeXlm,
-        feeKes,
-        simulatedSuccess: true
-      };
+      console.warn('[StellarService] RPC simulation failed, using conservative fallback:', err);
+      const minFeeStroops = 200_000;
+      const feeXlm = minFeeStroops / 10_000_000;
+      return { minFeeStroops, feeXlm, feeKes: feeXlm * config.kesPerXlm, simulatedSuccess: false };
     }
   }
 
@@ -174,26 +173,40 @@ class StellarService {
   }
 
   /**
-   * Submits the transaction to Stellar network
+   * Submits a signed fee-bump XDR to the Stellar RPC and polls until
+   * the transaction reaches SUCCESS or FAILED status.
    */
   public async submitTransaction(
     feeBumpXdr: string,
-    channelKeypair: Keypair
+    _channelKeypair: Keypair
   ): Promise<{ txHash: string; ledger: number }> {
-    try {
-      if (config.nodeEnv === 'test' || config.useInMemoryDb) {
-        // Fast mock submission for tests and local run
-        const txHash = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
-        const ledger = 1012345;
-        return { txHash, ledger };
-      }
-
-      const txHash = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
-      return { txHash, ledger: 1012345 };
-    } catch (err: any) {
-      console.error('Transaction Submission Error:', err.message);
-      throw err;
+    // Test/in-memory mode: skip real network call
+    if (config.nodeEnv === 'test' || config.useInMemoryDb) {
+      return { txHash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2', ledger: 1012345 };
     }
+
+    const feeBumpTx = TransactionBuilder.fromXDR(feeBumpXdr, this.networkPassphrase);
+    const sendResult = await this.server.sendTransaction(feeBumpTx);
+
+    if (sendResult.status === 'ERROR') {
+      throw new Error(`Transaction submission failed: ${JSON.stringify(sendResult.errorResult)}`);
+    }
+
+    const hash = sendResult.hash;
+
+    // Poll until confirmed or timeout
+    for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      const result = await this.server.getTransaction(hash);
+      if (result.status === 'SUCCESS') {
+        return { txHash: hash, ledger: (result as any).ledger ?? 0 };
+      }
+      if (result.status === 'FAILED') {
+        throw new Error(`Transaction failed on-chain: ${hash}`);
+      }
+    }
+
+    throw new Error(`Transaction confirmation timed out: ${hash}`);
   }
 
   /**
