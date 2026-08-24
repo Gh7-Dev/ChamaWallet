@@ -158,10 +158,13 @@ class StellarService {
       throw new Error('Inner transaction must be a standard Transaction for Fee-Bumping');
     }
 
-    // Build the fee-bump transaction
+    // Dynamically calculate fee: must exceed innerTx fee + safety threshold, with floor of 100,000 stroops
+    const innerFee = parseInt((innerTx as any).fee || '0', 10) || 0;
+    const feeToUse = Math.max(innerFee + 1000, 100000).toString();
+
     const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
       sponsorKeypair,
-      feeStroops.toString(),
+      feeToUse,
       innerTx,
       this.networkPassphrase
     );
