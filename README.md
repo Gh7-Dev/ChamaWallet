@@ -62,11 +62,13 @@ person's address anywhere in the app:
 | `get_chama(chama_name)` | Anyone (read-only) | Returns the group's full state |
 | `get_role(chama_name, member)` | Anyone (read-only) | Returns a member's role, if any |
 
+
 ## Project structure
 
 ```
 contracts/chama_wallet/    Soroban contract (Rust)
 chamawallet-frontend/      React + Vite web app
+backend/                   Node.js/Express Relayer + PostgreSQL DB + Channel Pool
 ```
 
 ## Running the contract
@@ -81,6 +83,28 @@ stellar contract build # -> target/wasm32v1-none/release/chama_wallet.wasm
 > link the host-target test binary. If those aren't installed, `stellar
 > contract build` still works — it only needs the `wasm32v1-none` target,
 > which doesn't touch the host linker.
+
+
+## Backend (Node.js/Express Relayer)
+
+The `backend/` directory runs a **Node.js/Express Relayer** (`backend/src/index.ts`) that sponsors transaction fees for the ChamaWallet smart contract. It provides fee sponsorship middleware, logs transactions to PostgreSQL, and manages a pool of Stellar channel accounts for signing.
+
+- `npm install` / `npm start` (dev server)
+- Configured via `backend/.env` (database URL, Stellar network, channel secrets)
+
+### PostgreSQL database (`chamawallet-db`)
+
+The relayer connects to a **PostgreSQL** database (`chamawallet-db`) via `pg` (`backend/src/services/db.service.ts`). It stores:
+
+- `chama_floats` — per-group opex float balances and status (`Normal`/`Warning`/`Locked`)
+- `transaction_logs` — fee sponsorship records (tx hash, member, fee in stroops/XLM/KES)
+- `reconciliation_logs` — periodic reconciliation summaries
+
+The DB service supports both live PostgreSQL and an in-memory fallback (`USE_IN_MEMORY_DB`).
+
+### Channel account pool
+
+`backend/src/services/channel-pool.service.ts` manages a **channel account pool** of Stellar keypairs used to sign sponsored transactions. The pool initializes from `CHANNEL_SECRETS` or generates 5 dynamic accounts for testing. Accounts are acquired (`acquireChannel`) and released (`releaseChannel`) with lock tracking to prevent concurrent use.
 
 ## Running the frontend
 
