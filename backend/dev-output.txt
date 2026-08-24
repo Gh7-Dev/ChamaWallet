@@ -1,0 +1,12 @@
+
+> chama-vault-relayer@1.0.0 dev
+> ts-node src/index.ts
+
+Connected to PostgreSQL Database.
+Initializing Channel Pool with 3 configured channel keys.
+=============================================================
+ ChamaVault Fee Sponsorship Relayer Middleware Started      
+ Running on Port: 3000                                    
+ Environment:     development                          
+ Stellar Network: TESTNET                   
+=============================================================

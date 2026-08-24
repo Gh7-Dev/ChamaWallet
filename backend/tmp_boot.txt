@@ -1,0 +1,20 @@
+[config] useInMemoryDb resolved to: false
+Connected to PostgreSQL Database.
+Initializing Channel Pool with 3 configured channel keys.
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at Server.listen (node:net:2171:7)
+    at app.listen (c:\Users\georg\Gh7-Dev\Soroban\ChamaWallet\backend\node_modules\express\lib\application.js:635:24)
+    at Object.<anonymous> (c:\Users\georg\Gh7-Dev\Soroban\ChamaWallet\backend\src\index.ts:6:5)
+    at Module._compile (node:internal/modules/cjs/loader:1871:14)
+    at Module.m._compile (c:\Users\georg\Gh7-Dev\Soroban\ChamaWallet\backend\node_modules\ts-node\src\index.ts:1618:23)
+    at node:internal/modules/cjs/loader:2002:10
+    at Object.require.extensions.<computed> [as .ts] (c:\Users\georg\Gh7-Dev\Soroban\ChamaWallet\backend\node_modules\ts-node\src\index.ts:1621:12)
+    at Module.load (node:internal/modules/cjs/loader:1594:32) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}

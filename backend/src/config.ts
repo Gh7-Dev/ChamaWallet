@@ -9,7 +9,7 @@ export const config = {
   
   // Database configuration
   databaseUrl: process.env.DATABASE_URL, // e.g. postgresql://postgres:postgres@localhost:5432/chamavault
-  useInMemoryDb: process.env.USE_IN_MEMORY_DB !== 'false', // Defaults to true if no DATABASE_URL is provided
+  useInMemoryDb: (process.env.USE_IN_MEMORY_DB ?? 'true').toLowerCase() === 'true', // false when .env sets USE_IN_MEMORY_DB=false
   
   // Stellar configurations
   stellarNetwork: process.env.STELLAR_NETWORK || 'TESTNET', // TESTNET or MAINNET
