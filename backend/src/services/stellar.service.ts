@@ -8,7 +8,7 @@ import {
   xdr,
   rpc,
 } from '@stellar/stellar-sdk';
-import { config } from '../config';
+import { config } from '../config';et
 import { channelPoolService } from './channel-pool.service';
 
 const POLL_INTERVAL_MS = 2000;
