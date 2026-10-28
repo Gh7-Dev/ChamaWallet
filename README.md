@@ -1,134 +1,101 @@
 # ChamaWallet
 
-A Soroban smart contract and bilingual web app for transparent, multi-signature
-treasury management for chama savings groups in East Africa — built on Stellar.
+ChamaWallet is a bilingual (English / Swahili) web application and Soroban smart contract for multi-signature treasury management for chama savings groups in East Africa. It is built on Stellar and is intended to make group membership, deposits, and withdrawal approval more transparent.
 
-## The problem
+## Problem
 
-Chamas across East Africa lose significant savings to unauthorized, secretive
-withdrawals — funds moved without the knowledge or consent of the group's
-members. This erodes trust and causes otherwise healthy savings groups to
-collapse.
+Savings groups need a clear way to govern shared funds and make treasury activity visible to members. ChamaWallet explores an on-chain approach where group membership and balances can be inspected and withdrawals require more than one member's approval.
 
-## The solution
+## Governance flow
 
-ChamaWallet puts a chama's treasury on-chain. Every withdrawal requires
-approval from two independent members before funds move, and every group's
-balance and membership is publicly verifiable — no single person can quietly
-drain the account.
+1. A founder proposes a group and claims one of three founding roles: Chairperson, Secretary, or Treasurer.
+2. The other two founders connect their own wallets and claim the remaining roles.
+3. The group becomes active when all three founding seats are filled.
+4. Regular members can request to join; the Secretary approves or leaves the request pending.
+5. A member can propose a withdrawal; it executes after two members approve it.
 
-## Governance model
+## Technology
 
-A group isn't controlled by one admin. It's founded by three people, each
-claiming their own role with their own wallet — nobody ever enters another
-person's address anywhere in the app:
+- **Smart contract:** Rust, Soroban SDK 26
+- **Network:** Stellar Testnet
+- **Frontend:** React 19, Vite, `@stellar/stellar-sdk`, and `@stellar/freighter-api`
+- **Backend service:** Node.js, TypeScript, Express, Stellar SDK, and PostgreSQL dependencies for fee sponsorship / relayer functionality and transaction-related records
 
-1. **Propose** — one founder proposes the group and claims one of the three
-   seats (Chairperson, Secretary, or Treasurer) for themselves.
-2. **Fill the remaining seats** — the other two open an invite link, connect
-   their own wallet, and claim their own seat. The group is `Proposed` — not
-   usable by anyone — until all three seats are filled.
-3. **Activate** — the moment the third seat is filled, the group becomes
-   `Active` in that same transaction. No separate "activate" step.
-4. **Regular members join by request** — once active, anyone can request to
-   join; the Secretary approves or the request stays pending.
-5. **Withdrawals need two signatures** — any member can propose a withdrawal;
-   it executes automatically once two members approve it.
+The frontend also uses browser `localStorage` for local UI preferences and display state. This is not the same as authoritative on-chain state. The repository contains a backend service, so the project should not be described as having no backend.
 
-## Tech stack
+## Smart-contract functions documented in the current implementation
 
-**Contract**
-- Rust, Soroban SDK 26
-- Stellar Testnet
+| Function | Purpose |
+|---|---|
+| `propose_chama` | Proposes a group and claims a founding role. |
+| `fill_role` | Claims an open founding role; the group activates once all three roles are filled. |
+| `request_join` | Requests membership in an active group. |
+| `approve_join` | Allows the Secretary to approve a pending join request. |
+| `deposit` | Deposits SEP-41 tokens into the group. |
+| `propose_withdrawal` | Proposes a withdrawal. |
+| `approve_withdrawal` | Approves a pending withdrawal; execution occurs at two approvals. |
+| `get_chama` | Reads group state. |
+| `get_role` | Reads a member's role. |
 
-**Frontend** ([chamawallet-frontend/](chamawallet-frontend/))
-- React 19 + Vite
-- `@stellar/stellar-sdk`, `@stellar/freighter-api` (wallet connect + signing)
-- Bilingual UI (English / Swahili) with a single language toggle
-- Nickname system — no raw wallet addresses are ever shown to users
-- No backend — all state lives on-chain or in the browser's `localStorage`
+## Repository structure
 
-## Contract functions
-
-| Function | Who calls it | What it does |
-|---|---|---|
-| `propose_chama(name, role, address)` | Anyone | Proposes a new group, claiming one founding seat for the caller |
-| `fill_role(chama_name, address, role)` | The other two founders | Claims an open founding seat with the caller's own address; activates the group once all three are filled |
-| `request_join(chama_name, requester)` | Anyone | Requests membership in an Active group |
-| `approve_join(chama_name, secretary, new_member)` | Secretary only | Approves a pending join request |
-| `deposit(name, from, token_id, amount)` | Any member | Deposits SEP-41 tokens into the group's balance |
-| `propose_withdrawal(chama_name, proposer, amount, recipient)` | Any member | Proposes a withdrawal |
-| `approve_withdrawal(chama_name, approver, token_id)` | Any member | Approves a pending withdrawal; executes automatically at 2 approvals |
-| `get_chama(chama_name)` | Anyone (read-only) | Returns the group's full state |
-| `get_role(chama_name, member)` | Anyone (read-only) | Returns a member's role, if any |
-
-
-## Project structure
-
-```
-contracts/chama_wallet/    Soroban contract (Rust)
-chamawallet-frontend/      React + Vite web app
-backend/                   Node.js/Express Relayer + PostgreSQL DB + Channel Pool
+```text
+.
+├── contracts/chama_wallet/     Soroban contract (Rust)
+├── chamawallet-frontend/       React + Vite application
+├── backend/                    Node.js / TypeScript relayer service
+└── README.md
 ```
 
-## Running the contract
+## Run the smart contract tests and build
+
+From the repository root:
 
 ```bash
 cd contracts/chama_wallet
-cargo test            # unit tests (soroban-sdk testutils)
-stellar contract build # -> target/wasm32v1-none/release/chama_wallet.wasm
+cargo test
+stellar contract build
 ```
 
-> **Note (Windows):** `cargo test`/`cargo check` require MSVC Build Tools to
-> link the host-target test binary. If those aren't installed, `stellar
-> contract build` still works — it only needs the `wasm32v1-none` target,
-> which doesn't touch the host linker.
+The contract build produces a WebAssembly artifact for deployment with the Stellar CLI.
 
-
-## Backend (Node.js/Express Relayer)
-
-The `backend/` directory runs a **Node.js/Express Relayer** (`backend/src/index.ts`) that sponsors transaction fees for the ChamaWallet smart contract. It provides fee sponsorship middleware, logs transactions to PostgreSQL, and manages a pool of Stellar channel accounts for signing.
-
-- `npm install` / `npm start` (dev server)
-- Configured via `backend/.env` (database URL, Stellar network, channel secrets)
-
-### PostgreSQL database (`chamawallet-db`)
-
-The relayer connects to a **PostgreSQL** database (`chamawallet-db`) via `pg` (`backend/src/services/db.service.ts`). It stores:
-
-- `chama_floats` — per-group opex float balances and status (`Normal`/`Warning`/`Locked`)
-- `transaction_logs` — fee sponsorship records (tx hash, member, fee in stroops/XLM/KES)
-- `reconciliation_logs` — periodic reconciliation summaries
-
-The DB service supports both live PostgreSQL and an in-memory fallback (`USE_IN_MEMORY_DB`).
-
-### Channel account pool
-
-`backend/src/services/channel-pool.service.ts` manages a **channel account pool** of Stellar keypairs used to sign sponsored transactions. The pool initializes from `CHANNEL_SECRETS` or generates 5 dynamic accounts for testing. Accounts are acquired (`acquireChannel`) and released (`releaseChannel`) with lock tracking to prevent concurrent use.
-
-## Running the frontend
+## Run the frontend
 
 ```bash
 cd chamawallet-frontend
 npm install
-npm start      # dev server, http://localhost:5173
-npm run build  # production build -> dist/
+npm start
+npm run build
 ```
 
-Requires the [Freighter](https://www.freighter.app/) browser extension,
-connected to Stellar Testnet.
+The frontend expects the Freighter browser extension connected to Stellar Testnet.
 
-## Deployed testnet contract
+## Backend service
 
+The backend is in `backend/`. Its package scripts include build, development start, database migration, and tests.
+
+```bash
+cd backend
+npm install
+npm test
+npm run build
 ```
+
+Configure environment variables locally as required by the backend's configuration. Do not commit credentials, database passwords, or Stellar secret keys.
+
+## Testnet contract
+
+The repository currently lists this contract ID:
+
+```text
 CCBCXYFUNTXZ5A76QPQEPHCRBOT7NQ5KXZSUUOTOTSMWRM2R7Y7EFJUI
 ```
 
+Verify the deployment against the current source before relying on it.
+
 ## Known limitations
 
-- The contract has no getter for a group's pending withdrawal proposal — the
-  frontend tracks proposal/approval state locally (per browser) as a display
-  hint, not an authoritative on-chain read.
-- Renaming a wallet address's nickname or switching browsers resets local
-  state (nickname, language, active group) — nothing is migrated between
-  devices since it's stored only in `localStorage`, by design (no backend).
+- The README and codebase should be kept aligned as the frontend and relayer evolve.
+- The contract does not expose a getter for a group's pending withdrawal proposal; the frontend README currently notes that proposal/approval display state may be tracked locally.
+- Browser-local preferences such as nicknames, language, and active group are not automatically shared between browsers or devices.
+- This project should be treated as a testnet prototype unless and until deployment, security review, and operational requirements have been verified.
